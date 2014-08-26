@@ -1,0 +1,348 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tree test</title>
+<script src="coffee-script.js"></script>
+</head>
+
+<body>
+<canvas id="cnv" width="640" height="480"></canvas>
+
+<script type="text/javascript">
+// requestAnimationFrame polyfill by Erik Möller. fixes from Paul Irish and Tino Zijdel
+ 
+// http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+// http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
+ 
+// MIT license
+ 
+(function() {
+    var lastTime = 0;
+    var vendors = ['ms', 'moz', 'webkit', 'o'];
+    for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+        window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+        window.cancelAnimationFrame = window[vendors[x]+'CancelAnimationFrame']
+                                   || window[vendors[x]+'CancelRequestAnimationFrame'];
+    }
+    if (!window.requestAnimationFrame)
+        window.requestAnimationFrame = function(callback, element) {
+            var currTime = new Date().getTime();
+            var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+            var id = window.setTimeout(function() { callback(currTime + timeToCall); },
+                timeToCall);
+            lastTime = currTime + timeToCall;
+            return id;
+        };
+     if (!window.cancelAnimationFrame)
+         window.cancelAnimationFrame = function(id) {
+             clearTimeout(id);
+         };
+}());
+
+// on the recommendation of HTML5: Up and Running
+
+function getCursorPosition(el, ev) {
+    var x, y;
+    if (ev.pageX != undefined && ev.pageY != undefined) {
+        x = ev.pageX;
+        y = ev.pageY;
+    } else {
+        x = ev.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
+        y = ev.clientY + document.body.scrollTop + document.documentElement.scrollTop;
+    }
+
+    x -= el.offsetLeft;
+    y -= el.offsetTop;
+
+    return {x: x, y: y};
+}
+</script>
+
+<script type="text/coffeescript">
+
+cnv = document.getElementById('cnv')
+ctx = cnv.getContext('2d')
+
+nodeStyle = stroke: 'white', width: 1.5, fill: 'black'
+nodeEmphStyle = stroke: 'white', width: 5.5, fill: 'black'
+nodeRadius = 15
+
+lightLinkStyle = stroke: 'white', width: .5
+linkStyle = stroke: 'white', width: 1.5
+
+setStyle = (ctx, s) ->
+  ctx.fillStyle   = s.fill   if s.fill
+  ctx.strokeStyle = s.stroke if s.stroke
+  ctx.lineWidth   = s.width  if s.width
+
+drawNodeDefault = (ctx, x, y) ->
+  ctx.save()
+  setStyle(ctx, nodeStyle)
+  ctx.beginPath()
+  ctx.arc(x,y,nodeRadius,0,Math.PI*2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
+
+drawNodeEmphasis = (ctx, x, y) ->
+  ctx.save()
+  setStyle(ctx, nodeEmphStyle)
+  ctx.beginPath()
+  ctx.arc(x,y,nodeRadius,0,Math.PI*2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.restore()
+
+drawLink = (ctx, x0, y0, x1, y1) ->
+  ctx.save()
+  setStyle(ctx, linkStyle)
+  ctx.beginPath()
+  ctx.moveTo(x0, y0)
+  ctx.lineTo(x1, y1)
+  ctx.stroke()
+  ctx.restore()
+
+drawLightLink = (ctx, x0, y0, x1, y1) ->
+  ctx.save()
+  setStyle(ctx, lightLinkStyle)
+  ctx.beginPath()
+  ctx.moveTo(x0, y0)
+  ctx.lineTo(x1, y1)
+  ctx.stroke()
+  ctx.restore()
+
+
+class Tree
+  constructor: () ->
+    @root =
+      children: []
+      x: 0
+      y: 0
+
+  draw: (ctx, node = @root) ->
+    ctx.save()
+
+    # draw links
+    if node.children?
+      for child in node.children
+        drawLink(ctx, node.x, node.y, child.x, child.y)
+
+    # draw node
+    if node.draw?
+      node.draw(ctx)
+    else
+      if node == @root
+        drawNodeEmphasis(ctx, node.x, node.y)
+      else
+        drawNodeDefault(ctx, node.x, node.y)
+
+    # draw children
+    if node.children?
+      @draw ctx, child for child in node.children
+
+    ctx.restore()
+
+  isHit: (x,y, node = @root) ->
+    dx = x-node.x
+    dy = y-node.y
+
+    return dx*dx + dy*dy < nodeRadius*nodeRadius
+
+  getNodeByHit: (x,y, node = @root) ->
+    if @isHit(x, y, node)
+      return node
+    if node.children?
+      for child in node.children
+        n = @getNodeByHit(x, y, child)
+        if n? then return n
+      
+    return null
+
+  forAllNodes: (fn, node = @root) ->
+    fn(node)
+    if node.children?
+      for child in node.children
+        @forAllNodes(fn, child)
+
+  addNode: (newnode, node = @root) ->
+    # TODO: guess where new node should go
+
+    if node.children?
+      node.children.push(newnode)
+    else
+      node.children = [newnode]
+
+  removeNode: (keynode, node = @root) ->
+    if node.children?
+      if keynode in node.children
+        node.children = ( n for n in node.children when n != keynode )
+        return true
+      for child in node.children
+        if b = @removeNode(keynode, child) then return b
+    return false
+
+trees = []
+
+# split a node into a new tree
+splitNode = (node) ->
+  # make sure it isn't a top-level tree
+  for tree in trees
+    if node == tree.root
+      console.log("refusing to split a top-level tree")
+      return false
+
+  # find it somewhere among the trees
+  for tree in trees
+    # remove node from old tree
+    found = tree.removeNode(node)
+    if not found then continue
+
+    # it is now a new tree
+    newtree = new Tree()
+    newtree.root = node
+    trees.push(newtree)
+
+    return true
+
+  return false
+
+# insert srcTree as a child of dstNode
+insertTree = (dstNode, srcTree) ->
+  Tree.prototype.addNode(srcTree.root, dstNode)
+
+  # remove the tree from the top-level list
+  trees = ( t for t in trees when t != srcTree )
+
+# create a new root tree with two trees as children
+joinTrees = (tree1, tree2) ->
+  newtree = new Tree()
+  newtree.root.x = (tree1.root.x + tree2.root.x) / 2
+  newtree.root.y = (tree1.root.y + tree2.root.y) / 2
+
+  newtree.root.children = [ tree1.root, tree2.root ]
+
+  # remove the trees from the top-level list
+  trees = ( t for t in trees when t != tree1 and t != tree2 )
+  trees.push(newtree)
+
+  return newtree
+
+tree1 = new Tree()
+tree1.addNode(x: 50, y:150)
+tree1.addNode(x: 150, y:150)
+tree1.root.x = 100
+tree1.root.y = 100
+
+tree2 = new Tree()
+tree2.root.x = 200
+tree2.root.y = 100
+
+trees = [tree1, tree2]
+
+#insertTree(tree2.root, tree1)
+#tree3 = joinTrees(tree1, tree2)
+
+selected = null
+
+cnv.addEventListener( 'mousedown', (e) ->
+  {x:x, y:y} = getCursorPosition(cnv, e)
+
+  for tree in trees
+    hitNode = tree.getNodeByHit(x, y)
+    if hitNode?
+      if selected? and selected.forJoin
+        if tree != selected.tree and hitNode == tree.root
+          selected.joinTarget = tree
+      else
+        selected =
+          node: hitNode
+          tree: tree
+          dragStart: {ox: hitNode.x, oy: hitNode.y, mx:x, my:y}
+          moved: 0
+      break
+
+  if selected? and selected.forJoin and not selected.joinTarget?
+    # extraneous click, give up joining
+    selected = null
+  else if not selected?
+    # insertion time
+    selected =
+      tree: new Tree()
+      dragStart: {ox: x, oy: y, mx:x, my:y}
+      moved: 0
+      isNew: true
+    selected.node = selected.tree.root
+    selected.node.x = x
+    selected.node.y = y
+
+    trees.push(selected.tree)
+)
+
+cnv.addEventListener( 'mousemove', (e) ->
+  {x:x, y:y} = getCursorPosition(cnv, e)
+
+  if selected?
+    sds = selected.dragStart
+    selected.moved += Math.abs(x - sds.mx) + Math.abs(y - sds.my)
+
+    dx = (x - sds.mx + sds.ox) - selected.node.x
+    dy = (y - sds.my + sds.oy) - selected.node.y
+
+    selected.mx = x
+    selected.my = y
+
+    if not selected.forJoin
+      selected.tree.forAllNodes( (node) ->
+        node.x += dx
+        node.y += dy
+      , selected.node)
+
+)
+
+cnv.addEventListener( 'mouseup', (e) ->
+  {x:x, y:y} = getCursorPosition(cnv, e)
+
+  if selected?
+    if selected.forJoin
+      newtree = joinTrees(selected.tree, selected.joinTarget)
+
+      if selected.tree.getNodeByHit(x, y) == null and
+         selected.joinTarget.getNodeByHit(x, y) == null
+        newtree.root.x = x
+        newtree.root.y = y
+
+      selected = null
+    else if selected.moved < 20
+      if selected.node == selected.tree.root and not selected.isNew
+        selected.forJoin = true
+      else
+        splitNode(selected.node)
+        selected = null
+    else
+      selected = null
+)
+
+anim = ->
+  fillStyle = 'black'
+  ctx.fillRect(0,0, cnv.width, cnv.height)
+
+  if selected? and selected.forJoin
+    if selected.joinTarget?
+      drawLink(ctx, selected.mx, selected.my, selected.tree.root.x, selected.tree.root.y)
+      drawLink(ctx, selected.mx, selected.my, selected.joinTarget.root.x, selected.joinTarget.root.y)
+      drawNodeEmphasis(ctx, selected.mx, selected.my)
+    else
+      drawLightLink(ctx, selected.mx, selected.my, selected.tree.root.x, selected.tree.root.y)
+
+
+  tree.draw(ctx) for tree in trees
+
+  window.requestAnimationFrame anim
+
+window.requestAnimationFrame anim
+
+
+</script>
+</body>
+</html>
