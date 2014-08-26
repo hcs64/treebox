@@ -88,7 +88,7 @@ class Inner extends Node
     ctx.moveTo(@x, @y)
     ctx.lineTo(@child0.x, @child0.y)
     ctx.moveTo(@x, @y)
-    ctx.lineTo(@child1.x, @child0.y)
+    ctx.lineTo(@child1.x, @child1.y)
     ctx.stroke()
     ctx.restore()
 
@@ -113,7 +113,7 @@ class Inner extends Node
       fn(@child0)
 
     if @child1.forAll?
-      child1.forAll(fn)
+      @child1.forAll(fn)
     else
       fn(@child1)
 
@@ -213,7 +213,7 @@ class NodeCollection
     @nodes = ( n for n in @nodes when n isnt node0 and n isnt node1 )
     newnode = new Inner(node0.value + node1.value, node0, node1)
     newnode.x = (node0.x + node1.x) / 2
-    newnode.y = (node0.y + node1.y) / 2 - Math.abs(node0.x - node1.x)
+    newnode.y = Math.min(node0.y, node1.y) - Math.abs(node0.x - node1.x)
     @nodes.push(newnode)
 
 # render loop
