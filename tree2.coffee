@@ -34,6 +34,7 @@ engage = (str) ->
 node_style = stroke: 'white', width: 1.5, fill: 'black'
 node_emph_style = stroke: 'white', width: 5.5, fill: 'black'
 link_style = stroke: 'white', width: 1.5
+light_link_style = stroke: 'white', width: .5
 node_text_style = fill: 'white', font: '16px monospace'
 
 setStyle = (ctx, s) ->
@@ -45,6 +46,7 @@ setStyle = (ctx, s) ->
 class Node
   render: (ctx) ->
     ctx.save()
+    ctx.translate(@x, @y)
     setStyle(ctx, node_style)
     ctx.beginPath()
     ctx.arc(0,0,@radius,0,Math.PI*2)
@@ -65,6 +67,8 @@ class Leaf extends Node
     
   render: (ctx) ->
     super ctx
+    ctx.save()
+    ctx.translate(@x, @y)
     setStyle(ctx, node_text_style)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -73,6 +77,47 @@ class Leaf extends Node
       ctx.fillText(@label,0,2*@radius)
 
     ctx.fillText(@value, 0, 0)
+    ctx.restore()
+
+class Inner extends Node
+  constructor: (@value, @child0, @child1) ->
+
+  render: (ctx) ->
+    ctx.save()
+    setStyle(ctx, link_style)
+    ctx.moveTo(@x, @y)
+    ctx.lineTo(@child0.x, @child0.y)
+    ctx.moveTo(@x, @y)
+    ctx.lineTo(@child1.x, @child0.y)
+    ctx.stroke()
+    ctx.restore()
+
+    super ctx
+
+    ctx.save()
+    ctx.translate(@x, @y)
+    setStyle(ctx, node_text_style)
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    ctx.fillText(@value, 0, 0)
+    ctx.restore()
+ 
+    @child0.render(ctx)
+    @child1.render(ctx)
+
+  forAll: (fn) ->
+    if @child0.forAll?
+      @child0.forAll(fn)
+    else
+      fn(@child0)
+
+    if @child1.forAll?
+      child1.forAll(fn)
+    else
+      fn(@child1)
+
+    fn(this)
 
 class NodeCollection
   constructor: () ->
@@ -93,9 +138,16 @@ class NodeCollection
       i += 1
 
   render: (ctx) ->
+    if @merging?
+      ctx.save()
+      setStyle(ctx, light_link_style)
+      ctx.moveTo(@merging.node.x, @merging.node.y)
+      ctx.lineTo(@merging.x, @merging.y)
+      ctx.stroke()
+      ctx.restore()
+
     for n in @nodes
       ctx.save()
-      ctx.translate(n.x, n.y)
       n.render(ctx)
       ctx.restore()
 
@@ -104,14 +156,23 @@ class NodeCollection
   mousedown: (pos) ->
     for n in @nodes
       if n.isHit(pos)
-        @selected =
-          node: n
-          ox: n.x # original location
-          oy: n.y
-          mx: pos.x # mousedown location
-          my: pos.y
-          t: Date.now()
+        if @merging?
+          if n isnt @merging.node
+            @mergeNodes(@merging.node, n)
+            @merging = null
+        else
+          @selected =
+            node: n
+            ox: n.x # original location
+            oy: n.y
+            mx: pos.x # mousedown location
+            my: pos.y
+            t: Date.now()
         true
+
+    if @merging?
+      @merging = null
+
     false
 
   mousemove: (pos) ->
@@ -119,10 +180,18 @@ class NodeCollection
       s = @selected
       dx = (pos.x - s.mx + s.ox) - s.node.x
       dy = (pos.y - s.my + s.oy) - s.node.y
-      s.node.x += dx
-      s.node.y += dy
 
-      # TODO: apply to children
+      moveFn = (node) ->
+        node.x += dx
+        node.y += dy
+      if s.node.forAll?
+        s.node.forAll(moveFn)
+      else
+        moveFn(s.node)
+
+    if @merging?
+      @merging.x = pos.x
+      @merging.y = pos.y
 
   mouseup: (pos) ->
     if @selected?
@@ -130,8 +199,22 @@ class NodeCollection
         mdx = pos.x - @selected.mx
         mdy = pos.y - @selected.my
         if mdx*mdx+mdy*mdy < 10*10
-          console.log('looks like a click')
+          # call it a click
+
+          @merging =
+            node: @selected.node
+            x: pos.x
+            y: pos.y
+
     @selected = null
+
+  mergeNodes: (node0, node1) ->
+    # filter both out of the list
+    @nodes = ( n for n in @nodes when n isnt node0 and n isnt node1 )
+    newnode = new Inner(node0.value + node1.value, node0, node1)
+    newnode.x = (node0.x + node1.x) / 2
+    newnode.y = (node0.y + node1.y) / 2 - Math.abs(node0.x - node1.x)
+    @nodes.push(newnode)
 
 # render loop
 canvas = document.getElementById('cnv')
