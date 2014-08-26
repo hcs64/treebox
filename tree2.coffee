@@ -92,6 +92,7 @@ class Inner extends Node
   render: (ctx) ->
     ctx.save()
     setStyle(ctx, link_style)
+    ctx.beginPath()
     ctx.moveTo(@x, @y)
     ctx.lineTo(@child0.x, @child0.y)
     ctx.moveTo(@x, @y)
@@ -151,6 +152,7 @@ class NodeCollection
     if @merging?
       ctx.save()
       setStyle(ctx, light_link_style)
+      ctx.beginPath()
       ctx.moveTo(@merging.node.x, @merging.node.y)
       ctx.lineTo(@merging.x, @merging.y)
       ctx.stroke()
