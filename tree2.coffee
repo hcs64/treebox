@@ -60,6 +60,13 @@ class Node
 
     (dx*dx + dy*dy < @radius*@radius)
 
+  forAll: (fn) ->
+    fn(this)
+    return
+
+  tryAll: (fn) ->
+    return fn(this)
+
   radius: 15
 
 class Leaf extends Node
@@ -107,15 +114,18 @@ class Inner extends Node
     @child1.render(ctx)
 
   forAll: (fn) ->
-    if @child0.forAll?
-      @child0.forAll(fn)
-    else
-      fn(@child0)
+    @child0.forAll(fn)
+    @child1.forAll(fn)
+    fn(this)
 
-    if @child1.forAll?
-      @child1.forAll(fn)
-    else
-      fn(@child1)
+  tryAll: (fn) ->
+    result = @child0.tryAll(fn)
+    if result?
+      return result
+
+    result = @child1.tryAll(fn)
+    if result?
+      return result
 
     fn(this)
 
@@ -160,20 +170,32 @@ class NodeCollection
           if n isnt @merging.node
             @mergeNodes(@merging.node, n)
             @merging = null
-        else
-          @selected =
-            node: n
-            ox: n.x # original location
-            oy: n.y
-            mx: pos.x # mousedown location
-            my: pos.y
-            t: Date.now()
-        true
+
+            return true
 
     if @merging?
       @merging = null
 
-    false
+    # try moving nodes
+    for n in @nodes
+      hit = n.tryAll( (node) ->
+        if node.isHit(pos)
+          node
+        else
+          null
+      )
+
+      if hit?
+        @selected =
+          node: hit
+          ox: hit.x # original location
+          oy: hit.y
+          mx: pos.x # mousedown location
+          my: pos.y
+          t: Date.now()
+        return true
+
+    return false
 
   mousemove: (pos) ->
     if @selected?
@@ -201,10 +223,11 @@ class NodeCollection
         if mdx*mdx+mdy*mdy < 10*10
           # call it a click
 
-          @merging =
-            node: @selected.node
-            x: pos.x
-            y: pos.y
+          if @selected.node in @nodes
+            @merging =
+              node: @selected.node
+              x: pos.x
+              y: pos.y
 
     @selected = null
 
