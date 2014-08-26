@@ -2,26 +2,6 @@
 pendingString = ''
 collection = null
 
-document.addEventListener 'keypress', (e) ->
-  if e.ctrlKey || e.altKey || e.metaKey
-    # keyboard shortcut of some kind
-    true
-  else
-    s = translateCharCode(e)
-    if s.length != 0
-      pendingString += s
-    e.preventDefault()
-
-document.addEventListener 'keydown', (e) ->
-  if (e.keyCode == 13)
-    engage(pendingString)
-    pendingString = ''
-    e.preventDefault()
-  else if (e.keyCode == 8)
-    # backspace
-    pendingString = pendingString[...-1]
-    e.preventDefault()
-
 engage = (str) ->
   if str.length == 0
     return
@@ -54,7 +34,7 @@ engage = (str) ->
 node_style = stroke: 'white', width: 1.5, fill: 'black'
 node_emph_style = stroke: 'white', width: 5.5, fill: 'black'
 link_style = stroke: 'white', width: 1.5
-node_text_style = fill: 'white', font: '32px monospace'
+node_text_style = fill: 'white', font: '16px monospace'
 
 setStyle = (ctx, s) ->
   ctx.fillStyle   = s.fill   if s.fill
@@ -72,6 +52,12 @@ class Node
     ctx.stroke()
     ctx.restore()
 
+  isHit: (pos) ->
+    dx = @x - pos.x
+    dy = @y - pos.y
+
+    (dx*dx + dy*dy < @radius*@radius)
+
   radius: 15
 
 class Leaf extends Node
@@ -88,12 +74,9 @@ class Leaf extends Node
 
     ctx.fillText(@value, 0, 0)
 
-  radius: 32
-
 class NodeCollection
   constructor: () ->
     @nodes = []
-
 
   addLeaves: (dict, pos) ->
     length = 0
@@ -117,7 +100,40 @@ class NodeCollection
       ctx.restore()
 
       # TODO: render collection handle
-# 
+
+  mousedown: (pos) ->
+    for n in @nodes
+      if n.isHit(pos)
+        @selected =
+          node: n
+          ox: n.x # original location
+          oy: n.y
+          mx: pos.x # mousedown location
+          my: pos.y
+          t: Date.now()
+        true
+    false
+
+  mousemove: (pos) ->
+    if @selected?
+      s = @selected
+      dx = (pos.x - s.mx + s.ox) - s.node.x
+      dy = (pos.y - s.my + s.oy) - s.node.y
+      s.node.x += dx
+      s.node.y += dy
+
+      # TODO: apply to children
+
+  mouseup: (pos) ->
+    if @selected?
+      if Date.now() - @selected.t < 200
+        mdx = pos.x - @selected.mx
+        mdy = pos.y - @selected.my
+        if mdx*mdx+mdy*mdy < 10*10
+          console.log('looks like a click')
+    @selected = null
+
+# render loop
 canvas = document.getElementById('cnv')
 context = canvas.getContext('2d')
 
@@ -130,9 +146,45 @@ render = ->
     context.font = '32px monospace'
     context.fillText(pendingString, 0, canvas.height - 32)
 
-  if collection
+  if collection?
     collection.render(context)
 
   window.requestAnimationFrame(render)
 
 window.requestAnimationFrame(render)
+
+# input from user
+document.addEventListener 'keypress', (e) ->
+  if e.ctrlKey || e.altKey || e.metaKey
+    # keyboard shortcut of some kind
+    true
+  else
+    s = translateCharCode(e)
+    if s.length != 0
+      pendingString += s
+    e.preventDefault()
+
+document.addEventListener 'keydown', (e) ->
+  if (e.keyCode == 13)
+    engage(pendingString)
+    pendingString = ''
+    e.preventDefault()
+  else if (e.keyCode == 8)
+    # backspace
+    pendingString = pendingString[...-1]
+    e.preventDefault()
+
+canvas.addEventListener 'mousedown', (e) ->
+  pos = getCursorPosition(canvas, e)
+  if collection?
+    collection.mousedown(pos)
+
+canvas.addEventListener 'mousemove', (e) ->
+  pos = getCursorPosition(canvas, e)
+  if collection?
+    collection.mousemove(pos)
+
+canvas.addEventListener 'mouseup', (e) ->
+  pos = getCursorPosition(canvas, e)
+  if collection?
+    collection.mouseup(pos)
