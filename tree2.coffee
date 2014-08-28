@@ -221,8 +221,16 @@ class NodeCollection
     if @dropdown_menu?
       ctx.fillStyle = ctx.strokeStyle
       ctx.fill()
-      ctx.restore()
+    else
+      ctx.stroke()
 
+    ctx.restore()
+
+    return
+
+  render_overlay: (ctx, idx) ->
+    if @dropdown_menu?
+      ctx.save()
       ctx.textAlign = 'start'
       ctx.textBaseline = 'top'
 
@@ -244,9 +252,9 @@ class NodeCollection
         ctx.fillText(option.name,
           @dropdown_menu.pos.x,
           @dropdown_menu.pos.y + menu_text_height * (i+1))
-    else
-      ctx.stroke()
+
       ctx.restore()
+    return
 
 
   mousedown: (pos, idx) ->
@@ -371,6 +379,9 @@ render = ->
 
   for collection, idx in collections
     collection.render(context, idx)
+
+  for collection, idx in collections
+    collection.render_overlay(context, idx)
 
   window.requestAnimationFrame(render)
 
