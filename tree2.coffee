@@ -1,6 +1,6 @@
 # keyboard input
 pendingString = ''
-collection = null
+collections = []
 
 engage = (str) ->
   if str.length == 0
@@ -25,8 +25,10 @@ engage = (str) ->
       else
         letters[c] = 1
 
-  collection = new NodeCollection()
+  shapes = ['circle','square','diamond']
+  collection = new NodeCollection(shapes[collections.length % shapes.length])
   collection.addLeaves(letters, (x: canvas.width/2, y: canvas.height/2))
+  collections.push(collection)
 
   return
 
@@ -43,13 +45,34 @@ setStyle = (ctx, s) ->
   ctx.lineWidth   = s.width  if s.width
   ctx.font        = s.font   if s.font
 
+renderShape = (ctx, shape, radius) ->
+  switch shape
+    when 'circle'
+      ctx.arc(0,0,radius,0,Math.PI*2)
+    when 'square'
+      ctx.moveTo(-radius,-radius)
+      ctx.lineTo(-radius,+radius)
+      ctx.lineTo(+radius,+radius)
+      ctx.lineTo(+radius,-radius)
+      ctx.closePath()
+    when 'diamond'
+      ctx.moveTo(-radius*Math.SQRT2,0)
+      ctx.lineTo(0,+radius*Math.SQRT2)
+      ctx.lineTo(+radius*Math.SQRT2,0)
+      ctx.lineTo(0,-radius*Math.SQRT2)
+      ctx.closePath()
+
+  return
+
+default_node_radius = 15
+
 class Node
   render: (ctx) ->
     ctx.save()
     ctx.translate(@x, @y)
     setStyle(ctx, node_style)
     ctx.beginPath()
-    ctx.arc(0,0,@radius,0,Math.PI*2)
+    renderShape(ctx, @shape, @radius)
     ctx.fill()
     ctx.stroke()
     ctx.restore()
@@ -67,10 +90,10 @@ class Node
   tryAll: (fn) ->
     return fn(this)
 
-  radius: 15
+  radius: default_node_radius
 
 class Leaf extends Node
-  constructor: (@value, @label = '') ->
+  constructor: (@value, @label, @shape) ->
     
   render: (ctx) ->
     super ctx
@@ -87,7 +110,7 @@ class Leaf extends Node
     ctx.restore()
 
 class Inner extends Node
-  constructor: (@value, @child0, @child1) ->
+  constructor: (@value, @child0, @child1, @shape) ->
 
   render: (ctx) ->
     ctx.save()
@@ -131,7 +154,7 @@ class Inner extends Node
     fn(this)
 
 class NodeCollection
-  constructor: () ->
+  constructor: (@shape) ->
     @nodes = []
 
   addLeaves: (dict, pos) ->
@@ -141,14 +164,14 @@ class NodeCollection
 
     i = 0
     for label, value of dict
-      leaf = new Leaf(value, label)
+      leaf = new Leaf(value, label, @shape)
       @nodes.push(leaf)
       leaf.x = pos.x + (i / length - .5 ) * 3 * leaf.radius * length
       leaf.y = pos.y
 
       i += 1
 
-  render: (ctx) ->
+  render: (ctx, idx) ->
     if @merging?
       ctx.save()
       setStyle(ctx, light_link_style)
@@ -163,7 +186,13 @@ class NodeCollection
       n.render(ctx)
       ctx.restore()
 
-      # TODO: render collection handle
+    ctx.save()
+    ctx.translate(default_node_radius*2, default_node_radius*(2 + 3 * idx))
+    setStyle(ctx, node_style)
+    ctx.beginPath()
+    renderShape(ctx, @shape, default_node_radius)
+    ctx.stroke()
+    ctx.restore()
 
   mousedown: (pos) ->
     for n in @nodes
@@ -236,7 +265,7 @@ class NodeCollection
   mergeNodes: (node0, node1) ->
     # filter both out of the list
     @nodes = ( n for n in @nodes when n isnt node0 and n isnt node1 )
-    newnode = new Inner(node0.value + node1.value, node0, node1)
+    newnode = new Inner(node0.value + node1.value, node0, node1, @shape)
     newnode.x = (node0.x + node1.x) / 2
     newnode.y = Math.min(node0.y, node1.y) - Math.abs(node0.x - node1.x)
     @nodes.push(newnode)
@@ -254,8 +283,8 @@ render = ->
     context.font = '32px monospace'
     context.fillText(pendingString, 0, canvas.height - 32)
 
-  if collection?
-    collection.render(context)
+  for collection, idx in collections
+    collection.render(context, idx)
 
   window.requestAnimationFrame(render)
 
@@ -284,15 +313,16 @@ document.addEventListener 'keydown', (e) ->
 
 canvas.addEventListener 'mousedown', (e) ->
   pos = getCursorPosition(canvas, e)
-  if collection?
-    collection.mousedown(pos)
+  for i in [collections.length - 1..0] by -1
+    if collections[i].mousedown(pos)
+      break
 
 canvas.addEventListener 'mousemove', (e) ->
   pos = getCursorPosition(canvas, e)
-  if collection?
+  for collection in collections
     collection.mousemove(pos)
 
 canvas.addEventListener 'mouseup', (e) ->
   pos = getCursorPosition(canvas, e)
-  if collection?
+  for collection in collections
     collection.mouseup(pos)
