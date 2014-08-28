@@ -38,6 +38,9 @@ node_emph_style = stroke: 'white', width: 5.5, fill: 'black'
 link_style = stroke: 'white', width: 1.5
 light_link_style = stroke: 'white', width: .5
 node_text_style = fill: 'white', font: '16px monospace'
+menu_text_style = fill: 'white', font: '16px sans'
+menu_text_invert_style = fill: 'black', font: '16px sans'
+menu_text_height = 18
 
 setStyle = (ctx, s) ->
   ctx.fillStyle   = s.fill   if s.fill
@@ -153,6 +156,29 @@ class Inner extends Node
 
     fn(this)
 
+collection_dropdown_menu = [
+  {
+    name: 'sort by weight',
+    action: (c) ->
+      console.log('sort by weight')
+  },
+  {
+    name: 'sort by alpha',
+    action: (c) ->
+      console.log('sort by alpha')
+  },
+  {
+    name: 'Shannon-Fano',
+    action: (c) ->
+      console.log('Shannon-Fano')
+  },
+  {
+    name: 'Huffman',
+    action: (c) ->
+      console.log('Huffman')
+  }
+]
+
 class NodeCollection
   constructor: (@shape) ->
     @nodes = []
@@ -191,10 +217,39 @@ class NodeCollection
     setStyle(ctx, node_style)
     ctx.beginPath()
     renderShape(ctx, @shape, default_node_radius)
-    ctx.stroke()
-    ctx.restore()
 
-  mousedown: (pos) ->
+    if @dropdown_menu?
+      ctx.fillStyle = ctx.strokeStyle
+      ctx.fill()
+      ctx.restore()
+
+      ctx.textAlign = 'start'
+      ctx.textBaseline = 'top'
+
+      for option, i in @dropdown_menu.options
+        setStyle(ctx, menu_text_style)
+        measure = ctx.measureText(option.name)
+        ctx.fillStyle= if @dropdown_menu.selected == i then 'white' else 'black'
+        ctx.fillRect(
+          @dropdown_menu.pos.x,
+          @dropdown_menu.pos.y + menu_text_height * (i+1),
+          measure.width,
+          menu_text_height)
+
+        setStyle(ctx, if @dropdown_menu.selected == i
+            menu_text_invert_style
+          else
+            menu_text_style)
+
+        ctx.fillText(option.name,
+          @dropdown_menu.pos.x,
+          @dropdown_menu.pos.y + menu_text_height * (i+1))
+    else
+      ctx.stroke()
+      ctx.restore()
+
+
+  mousedown: (pos, idx) ->
     for n in @nodes
       if n.isHit(pos)
         if @merging?
@@ -226,9 +281,30 @@ class NodeCollection
           t: Date.now()
         return true
 
+    if @isHandleHit(pos, idx)
+      @dropdown_menu = {
+        pos: pos
+        options: collection_dropdown_menu
+        selected: -1
+      }
     return false
 
+  isHandleHit: (pos, idx) ->
+    dx = pos.x - default_node_radius*2
+    dy = pos.y - default_node_radius*(2 + 3 * idx)
+
+    return dx*dx + dy*dy < default_node_radius*default_node_radius
+
   mousemove: (pos) ->
+    if @dropdown_menu?
+      @dropdown_menu.selected = -1
+      for option, i in @dropdown_menu.options
+        if pos.x > @dropdown_menu.pos.x and
+           pos.y >= @dropdown_menu.pos.y + menu_text_height * (i+1) and
+           pos.y <  @dropdown_menu.pos.y + menu_text_height * (i+2)
+          @dropdown_menu.selected = i
+      return
+
     if @selected?
       s = @selected
       dx = (pos.x - s.mx + s.ox) - s.node.x
@@ -246,7 +322,15 @@ class NodeCollection
       @merging.x = pos.x
       @merging.y = pos.y
 
+    return
+
   mouseup: (pos) ->
+    if @dropdown_menu?
+      if @dropdown_menu.selected >= 0
+        @dropdown_menu.options[@dropdown_menu.selected].action(this)
+      @dropdown_menu = null
+      return
+
     if @selected?
       if Date.now() - @selected.t < 200
         mdx = pos.x - @selected.mx
@@ -261,6 +345,8 @@ class NodeCollection
               y: pos.y
 
     @selected = null
+
+    return
 
   mergeNodes: (node0, node1) ->
     # filter both out of the list
@@ -313,8 +399,8 @@ document.addEventListener 'keydown', (e) ->
 
 canvas.addEventListener 'mousedown', (e) ->
   pos = getCursorPosition(canvas, e)
-  for i in [collections.length - 1..0] by -1
-    if collections[i].mousedown(pos)
+  for idx in [collections.length - 1..0] by -1
+    if collections[idx].mousedown(pos, idx)
       break
 
 canvas.addEventListener 'mousemove', (e) ->
