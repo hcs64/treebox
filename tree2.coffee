@@ -159,22 +159,23 @@ class Inner extends Node
 collection_dropdown_menu = [
   {
     name: 'sort by weight',
-    action: (c) ->
+    action: (c, t) ->
       console.log('sort by weight')
+      c.sortNodes( ((n1, n2) -> n1.value - n2.value), t)
   },
   {
     name: 'sort by alpha',
-    action: (c) ->
+    action: (c, t) ->
       console.log('sort by alpha')
   },
   {
     name: 'Shannon-Fano',
-    action: (c) ->
+    action: (c, t) ->
       console.log('Shannon-Fano')
   },
   {
     name: 'Huffman',
-    action: (c) ->
+    action: (c, t) ->
       console.log('Huffman')
   }
 ]
@@ -182,6 +183,7 @@ collection_dropdown_menu = [
 class NodeCollection
   constructor: (@shape) ->
     @nodes = []
+    @animations = []
 
   addLeaves: (dict, pos) ->
     length = 0
@@ -197,7 +199,12 @@ class NodeCollection
 
       i += 1
 
-  render: (ctx, idx) ->
+  render: (ctx, idx, t) ->
+    if @animations.length > 0
+      @animations[0].setPositions(t)
+      if @animations[0].isFinished(t)
+        @animations = @animations[1..]
+
     if @merging?
       ctx.save()
       setStyle(ctx, light_link_style)
@@ -257,7 +264,7 @@ class NodeCollection
     return
 
 
-  mousedown: (pos, idx) ->
+  mousedown: (pos, idx, t) ->
     for n in @nodes
       if n.isHit(pos)
         if @merging?
@@ -286,7 +293,7 @@ class NodeCollection
           oy: hit.y
           mx: pos.x # mousedown location
           my: pos.y
-          t: Date.now()
+          t: t
         return true
 
     if @isHandleHit(pos, idx)
@@ -332,15 +339,15 @@ class NodeCollection
 
     return
 
-  mouseup: (pos) ->
+  mouseup: (pos, t) ->
     if @dropdown_menu?
       if @dropdown_menu.selected >= 0
-        @dropdown_menu.options[@dropdown_menu.selected].action(this)
+        @dropdown_menu.options[@dropdown_menu.selected].action(this, t)
       @dropdown_menu = null
       return
 
     if @selected?
-      if Date.now() - @selected.t < 200
+      if t - @selected.t < 200
         mdx = pos.x - @selected.mx
         mdy = pos.y - @selected.my
         if mdx*mdx+mdy*mdy < 10*10
@@ -364,11 +371,70 @@ class NodeCollection
     newnode.y = Math.min(node0.y, node1.y) - Math.abs(node0.x - node1.x)
     @nodes.push(newnode)
 
+  makeLineupAnim: (yoffset, duration, t) ->
+    midpointy = 0
+    for n in @nodes
+      midpointy += n.y
+    midpointy /= @nodes.length
+
+    anims =
+      (new NodeAnimation(n, (x:n.x, y:midpointy+yoffset), duration)) for n in @nodes
+
+    return new CollectionAnimation(anims, t)
+
+  makeMove1Anim: ->
+
+  sortNodes: (compare, t) ->
+    anims = []
+    anims.push(@makeLineupAnim(default_node_radius, .1, t))
+
+    #oldnodes = @nodes.slice(0) # clone
+    #newnodes = []
+    #while oldnode.length > 0
+
+    @animations = @animations.concat(anims)
+
+
+lerp2d = (t, p0, p1) ->
+  if t < 0
+    t = 0
+  if t > 1
+    t = 1
+  x: (p1.x - p0.x)*t + p0.x
+  y: (p1.y - p0.y)*t + p0.y
+
+class NodeAnimation
+  constructor: (@node, @destpos, @duration) ->
+    @origpos = {x: @node.x, y: @node.y}
+
+  setPosition: (time) ->
+    pos = lerp2d(time/@duration, @origpos, @destpos)
+    @node.x = pos.x
+    @node.y = pos.y
+
+  isFinished: (time) ->
+    time >= @duration
+
+class CollectionAnimation
+  constructor: (@node_animations, @start_time) ->
+
+  setPositions: (time) ->
+    for a in @node_animations
+      a.setPosition(time - @start_time)
+
+  isFinished: (time) ->
+    for a in @node_animations
+      if not a.isFinished(time - @start_time)
+        return false
+    return true
+
 # render loop
 canvas = document.getElementById('cnv')
 context = canvas.getContext('2d')
 
 render = ->
+  t = Date.now()/1000
+
   context.fillStyle = 'black'
   context.fillRect(0,0, canvas.width,canvas.height)
 
@@ -378,10 +444,10 @@ render = ->
     context.fillText(pendingString, 0, canvas.height - 32)
 
   for collection, idx in collections
-    collection.render(context, idx)
+    collection.render(context, idx, t)
 
   for collection, idx in collections
-    collection.render_overlay(context, idx)
+    collection.render_overlay(context, idx, t)
 
   window.requestAnimationFrame(render)
 
@@ -409,9 +475,10 @@ document.addEventListener 'keydown', (e) ->
     e.preventDefault()
 
 canvas.addEventListener 'mousedown', (e) ->
+  t = Date.now()/1000
   pos = getCursorPosition(canvas, e)
   for idx in [collections.length - 1..0] by -1
-    if collections[idx].mousedown(pos, idx)
+    if collections[idx].mousedown(pos, idx, t)
       break
 
 canvas.addEventListener 'mousemove', (e) ->
@@ -420,6 +487,7 @@ canvas.addEventListener 'mousemove', (e) ->
     collection.mousemove(pos)
 
 canvas.addEventListener 'mouseup', (e) ->
+  t = Date.now()/1000
   pos = getCursorPosition(canvas, e)
   for collection in collections
-    collection.mouseup(pos)
+    collection.mouseup(pos, t)
