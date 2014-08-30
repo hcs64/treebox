@@ -93,6 +93,16 @@ class Node
   tryAll: (fn) ->
     return fn(this)
 
+  move: (newx, newy) ->
+    # move a node and its children
+    dx = newx - @x
+    dy = newy - @y
+
+    moveFn = (node) ->
+      node.x += dx
+      node.y += dy
+    @forAll(moveFn)
+
   radius: default_node_radius
 
 class Leaf extends Node
@@ -322,16 +332,10 @@ class NodeCollection
 
     if @selected?
       s = @selected
-      dx = (pos.x - s.mx + s.ox) - s.node.x
-      dy = (pos.y - s.my + s.oy) - s.node.y
+      newx = pos.x - s.mx + s.ox
+      newy = pos.y - s.my + s.oy
 
-      moveFn = (node) ->
-        node.x += dx
-        node.y += dy
-      if s.node.forAll?
-        s.node.forAll(moveFn)
-      else
-        moveFn(s.node)
+      s.node.move(newx, newy)
 
     if @merging?
       @merging.x = pos.x
@@ -409,8 +413,7 @@ class NodeAnimation
 
   setPosition: (time) ->
     pos = lerp2d(time/@duration, @origpos, @destpos)
-    @node.x = pos.x
-    @node.y = pos.y
+    @node.move(pos.x, pos.y)
 
   isFinished: (time) ->
     time >= @duration
