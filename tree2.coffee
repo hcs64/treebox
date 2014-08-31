@@ -181,6 +181,7 @@ collection_dropdown_menu = [
     name: 'Shannon-Fano',
     action: (c, t) ->
       console.log('Shannon-Fano')
+      c.reconstruct_as = ShannonFanoNodeCollection
   },
   {
     name: 'Huffman',
@@ -232,6 +233,9 @@ shannon_fano_dropdown_menu = [
     name: 'finish Shannon-Fano',
     action: (c, t) ->
       console.log('finish Shannon-Fano')
+      # TODO: this definitely isn't goingt to work without the construction
+      # finished
+      c.reconstruct_as = NodeCollection
   }
 ]
 
@@ -378,7 +382,7 @@ class NodeCollection
       if @reconstruct_as?
         newcollection = new @reconstruct_as(this.shape)
         newcollection.copyNodesFrom(this)
-        delete @reconstructas
+        delete @reconstruct_as
         return newcollection
       else
         return this
@@ -458,9 +462,6 @@ class HuffmanNodeCollection extends NodeCollection
   constructor: (shape) ->
     super shape
 
-  copyNodesFrom: (nc) ->
-    @nodes = nc.nodes
-
   mousedown: (pos, idx, t) ->
     for n in @nodes
       if n.isHit(pos)
@@ -517,8 +518,80 @@ class HuffmanNodeCollection extends NodeCollection
     
 
 class ShannonFanoNodeCollection extends NodeCollection
+  constructor: (shape) ->
+    super shape
 
+    @updateNodes([], [])
 
+  copyNodesFrom: (nc) ->
+    super nc
+
+    @updateNodes(@nodes.slice(0), [])
+
+  updateNodes: (@nodes0, @nodes1) ->
+    
+    @computeBBoxes()
+
+  nodesBBox: (nodes) ->
+    if nodes.length == 0
+      return min: (x:0, y:0), len: (x: 0, y: 0)
+
+    minx = maxx = nodes[0].x
+    miny = maxy = nodes[0].y
+    for n in nodes[1..]
+      minx = Math.min(minx, n.x)
+      maxx = Math.max(maxx, n.x)
+      miny = Math.min(miny, n.y)
+      maxy = Math.max(maxy, n.y)
+
+    min: x: minx-default_node_radius, y: miny-default_node_radius
+    len: x: maxx-minx+default_node_radius*2, y:
+            maxy-miny+default_node_radius*3
+
+  computeBBoxes: ->
+    @bbox0 = null
+    @bbox1 = null
+
+    if @nodes0.length > 0
+      @bbox0 = @nodesBBox(@nodes0)
+
+    if @nodes1.length > 0
+      @bbox1 = @nodesBBox(@nodes1)
+
+    if (not @bbox1?) and @bbox0
+      @bbox1 =
+        min: x: @bbox0.min.x + @bbox0.len.x*2, y:
+                @bbox0.min.y
+        len: x: default_node_radius * 2, y: default_node_radius * 2
+
+  render: (ctx, idx, t) ->
+    super ctx, idx, t
+
+    for bbox, idx in [@bbox0, @bbox1]
+      ctx.save()
+      setStyle(ctx, node_style)
+      ctx.translate(
+        bbox.min.x + bbox.len.x/2,
+        bbox.min.y + bbox.len.y/2)
+
+      ctx.save()
+      ctx.scale(bbox.len.x,bbox.len.y)
+      ctx.beginPath()
+      renderShape(ctx, @shape, .75)
+      ctx.scale(1/bbox.len.x, 1/bbox.len.y)
+      ctx.stroke()
+      ctx.restore()
+
+      setStyle(ctx, node_text_style)
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+
+      ctx.fillText(''+idx,0,bbox.len.y)
+
+      ctx.restore()
+
+  collection_dropdown_menu: shannon_fano_dropdown_menu
+ 
 lerp2d = (t, p0, p1) ->
   if t < 0
     t = 0
