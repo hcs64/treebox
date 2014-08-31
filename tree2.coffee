@@ -188,6 +188,7 @@ class ShannonFanoNode extends Node
     renderShape(ctx, @shape, .75)
     # fix line width
     ctx.scale(1/@bbox.len.x, 1/@bbox.len.y)
+    ctx.fill()
     ctx.stroke()
     ctx.restore()
 
@@ -247,6 +248,7 @@ class ShannonFanoNode extends Node
     for n in @contains
       n.forAll(fn)
     fn(this)
+    @update()
 
   tryAll: (fn) ->
     for n in @contains
@@ -259,9 +261,6 @@ class ShannonFanoNode extends Node
   move: (newx, newy) ->
     super(newx, newy)
     @update()
-
-  clickend: (pos, t) ->
-    console.log("SF clicked")
 
 collection_dropdown_menu = [
   {
@@ -307,17 +306,6 @@ huffman_collection_dropdown_menu = [
 
 shannon_fano_dropdown_menu = [
   {
-    name: 'sort by weight',
-    action: (c, t) ->
-      console.log('sort by weight')
-      c.sortNodes( ((n1, n2) -> n2.value - n1.value), t)
-  },
-  {
-    name: 'sort alpha',
-    action: (c, t) ->
-      console.log('sort alpha')
-  },
-  {
     name: 'automatic Shannon-Fano step',
     action: (c, t) ->
       console.log('automatic Shannon-Fano step')
@@ -326,7 +314,7 @@ shannon_fano_dropdown_menu = [
     name: 'finish Shannon-Fano',
     action: (c, t) ->
       console.log('finish Shannon-Fano')
-      # TODO: this definitely isn't goingt to work without the construction
+      # TODO: this definitely isn't going to work without the construction
       # finished
       c.reconstruct_as = NodeCollection
   }
@@ -481,7 +469,7 @@ class NodeCollection
         return this
 
     if @selected?
-      if t - @selected.t < 200
+      if t - @selected.t < .2
         mdx = pos.x - @selected.mx
         mdy = pos.y - @selected.my
         if mdx*mdx+mdy*mdy < 10*10
@@ -556,16 +544,15 @@ class HuffmanNodeCollection extends NodeCollection
     super shape
 
   mousedown: (pos, idx, t) ->
-    for n in @nodes
-      if n.isHit(pos)
-        if @merging?
+    if @merging?
+      for n in @nodes
+        if n.isHit(pos)
           if n isnt @merging.node
             @mergeNodes(@merging.node, n)
             @merging = null
 
             return true
 
-    if @merging?
       @merging = null
 
     super pos, idx, t
@@ -576,6 +563,7 @@ class HuffmanNodeCollection extends NodeCollection
     if @merging?
       @merging.x = pos.x
       @merging.y = pos.y
+
     return
 
   collection_dropdown_menu: huffman_collection_dropdown_menu
@@ -614,15 +602,101 @@ class ShannonFanoNodeCollection extends NodeCollection
   constructor: (shape) ->
     super shape
 
-  default_bbox: (min: (x: 100, y: 100), len: (x: 100, y: 100))
+  defaultBBoxAt: (pos) ->
+    min: (x: pos.x - default_node_radius*2, y: pos.y - default_node_radius*2)
+    len: (x: default_node_radius*4, y: default_node_radius*4)
 
   copyNodesFrom: (nc) ->
-    @nodes = [ new ShannonFanoNode(nc.nodes, @shape, @default_bbox, "") ]
+    @nodes = [
+      new ShannonFanoNode(nc.nodes, @shape, @defaultBBoxAt((x:100,y:100)), "") ]
 
   render: (ctx, idx, t) ->
+    if @splitting?
+      ctx.save()
+      setStyle(ctx, light_link_style)
+      ctx.beginPath()
+      ctx.moveTo(@splitting.node.x, @splitting.node.y)
+      ctx.lineTo(@splitting.pos0.x, @splitting.pos0.y)
+      ctx.moveTo(@splitting.node.x, @splitting.node.y)
+      ctx.lineTo(@splitting.pos1.x, @splitting.pos1.y)
+
+      ctx.stroke()
+      ctx.restore()
+
     super ctx, idx, t
 
   collection_dropdown_menu: shannon_fano_dropdown_menu
+
+  mousedown: (pos, idx, t) ->
+    if @splitting?
+      hit_another = false
+      for n in @nodes
+        if n.isHit(pos)
+          hit_another = true
+          break
+
+      if not hit_another
+        @splitNode(@splitting.node, @splitting.pos0, @splitting.pos1)
+        @splitting = null
+        return true
+
+      @splitting = null
+
+    super pos, idx, t
+  
+  mousemove: (pos) ->
+    super pos
+
+    if @splitting?
+      @splitting.pos0 = (x: pos.x, y: pos.y)
+      @splitting.pos1 = (x: 2*@splitting.node.x - pos.x, y: pos.y)
+
+    return
+
+  mouseup: (pos, t) ->
+    retval = super(pos,t)
+    for n in @nodes
+      if n.update?
+        n.update()
+
+    return retval
+
+  clickend: (pos, t) ->
+    if @selected.node in @nodes
+      @splitting = node: @selected.node, pos0: pos, pos1: pos
+    else
+      super pos, t
+
+  splitNode: (node, pos0, pos1) ->
+    new0 = new ShannonFanoNode(node.contains, @shape, @defaultBBoxAt(pos0), 0)
+    new1 = new ShannonFanoNode([], @shape, @defaultBBoxAt(pos1), 1)
+
+    newnode = new Inner(node.value, new0, new1, @shape)
+
+    new0.move(pos0.x, pos0.y)
+    newnode.x = node.x
+    newnode.y = node.y
+    @replaceNode(node, newnode)
+
+  replaceNode: (oldnode, newnode) ->
+    # replace in any inner node
+    replaceFn = (node) ->
+      if node.child0 == oldnode
+        node.child0 = newnode
+      if node.child1 == oldnode
+        node.child1 = newnode
+
+    for n in @nodes
+      n.forAll(replaceFn)
+
+    # replace a root
+    @nodes = for n in @nodes
+      if n is oldnode
+        newnode
+      else
+        n
+
+    return
  
 lerp2d = (t, p0, p1) ->
   if t < 0
