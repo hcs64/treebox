@@ -171,12 +171,7 @@ collection_dropdown_menu = [
     name: 'sort by weight',
     action: (c, t) ->
       console.log('sort by weight')
-      c.sortNodes( ((n1, n2) -> n1.value - n2.value), t)
-  },
-  {
-    name: 'sort by alpha',
-    action: (c, t) ->
-      console.log('sort by alpha')
+      c.sortNodes( ((n1, n2) -> n2.value - n1.value), t)
   },
   {
     name: 'Shannon-Fano',
@@ -386,15 +381,43 @@ class NodeCollection
 
     return new CollectionAnimation(anims, t)
 
-  makeMove1Anim: ->
+  makeMove1Anim: (node, dest, duration, t) ->
+    return new CollectionAnimation([new NodeAnimation(node, dest, duration)], t)
 
   sortNodes: (compare, t) ->
     anims = []
-    anims.push(@makeLineupAnim(default_node_radius, .1, t))
+    anims.push(@makeLineupAnim(default_node_radius*2, .1, t))
 
-    #oldnodes = @nodes.slice(0) # clone
-    #newnodes = []
-    #while oldnode.length > 0
+    minx = @nodes[0].x
+    maxx = @nodes[0].x
+    totaly =  @nodes[0].y
+
+    for n in @nodes[1..]
+      totaly += n.y
+      minx = Math.min(n.x, minx)
+      maxx = Math.max(n.x, maxx)
+
+    desty = totaly / @nodes.length
+    width = Math.max(maxx - minx, @nodes.length * default_node_radius * 2)
+    spacing = width / (@nodes.length-1)
+
+    oldnodes = @nodes.slice(0) # clone
+    newnodes = []
+
+    while oldnodes.length > 0
+      max = oldnodes[0]
+      maxi = 0
+      for n,i in oldnodes[1..]
+        if compare(n, max) > 0
+          max = n
+          maxi = i+1
+
+      oldnodes = (n for n,i in oldnodes when i != maxi)
+      anims.push(@makeMove1Anim(max,
+        (x: minx+newnodes.length*spacing, y: desty), .1, -1))
+      newnodes.push(max)
+
+    @nodes = newnodes
 
     @animations = @animations.concat(anims)
 
@@ -409,9 +432,12 @@ lerp2d = (t, p0, p1) ->
 
 class NodeAnimation
   constructor: (@node, @destpos, @duration) ->
-    @origpos = {x: @node.x, y: @node.y}
+    @origpos = null
 
   setPosition: (time) ->
+    if @origpos == null
+      @origpos = {x: @node.x, y: @node.y}
+
     pos = lerp2d(time/@duration, @origpos, @destpos)
     @node.move(pos.x, pos.y)
 
@@ -422,6 +448,8 @@ class CollectionAnimation
   constructor: (@node_animations, @start_time) ->
 
   setPositions: (time) ->
+    if @start_time == -1
+      @start_time = time
     for a in @node_animations
       a.setPosition(time - @start_time)
 
