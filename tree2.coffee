@@ -27,7 +27,11 @@ engage = (str) ->
 
   shapes = ['circle','square','diamond']
   collection = new NodeCollection(shapes[collections.length % shapes.length])
-  collection.addLeaves(letters, (x: canvas.width/2, y: canvas.height/2))
+  collection.addLeaves(
+    letters,
+    (x: canvas.width/2, y: canvas.height/2 +
+                           collections.length * default_node_radius * 4)
+  )
   collections.push(collection)
 
   return
