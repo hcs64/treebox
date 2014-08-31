@@ -186,6 +186,52 @@ collection_dropdown_menu = [
     name: 'Huffman',
     action: (c, t) ->
       console.log('Huffman')
+      c.reconstruct_as = HuffmanNodeCollection
+  }
+]
+
+huffman_collection_dropdown_menu = [
+  {
+    name: 'sort by weight',
+    action: (c, t) ->
+      console.log('sort by weight')
+      c.sortNodes( ((n1, n2) -> n2.value - n1.value), t)
+  },
+  {
+    name: 'automatic Huffman step',
+    action: (c, t) ->
+      console.log('automatic Huffman step')
+  },
+  {
+    name: 'finish Huffman'
+    action: (c, t) ->
+      console.log('finish Huffman')
+      # TODO: maybe first this should automatically finish the construction?
+      c.reconstruct_as = NodeCollection
+  }
+]
+
+shannon_fano_dropdown_menu = [
+  {
+    name: 'sort by weight',
+    action: (c, t) ->
+      console.log('sort by weight')
+      c.sortNodes( ((n1, n2) -> n2.value - n1.value), t)
+  },
+  {
+    name: 'sort alpha',
+    action: (c, t) ->
+      console.log('sort alpha')
+  },
+  {
+    name: 'automatic Shannon-Fano step',
+    action: (c, t) ->
+      console.log('automatic Shannon-Fano step')
+  },
+  {
+    name: 'finish Shannon-Fano',
+    action: (c, t) ->
+      console.log('finish Shannon-Fano')
   }
 ]
 
@@ -193,6 +239,9 @@ class NodeCollection
   constructor: (@shape) ->
     @nodes = []
     @animations = []
+
+  copyNodesFrom: (nc) ->
+    @nodes = nc.nodes
 
   addLeaves: (dict, pos) ->
     length = 0
@@ -213,15 +262,6 @@ class NodeCollection
       @animations[0].setPositions(t)
       if @animations[0].isFinished(t)
         @animations = @animations[1..]
-
-    if @merging?
-      ctx.save()
-      setStyle(ctx, light_link_style)
-      ctx.beginPath()
-      ctx.moveTo(@merging.node.x, @merging.node.y)
-      ctx.lineTo(@merging.x, @merging.y)
-      ctx.stroke()
-      ctx.restore()
 
     for n in @nodes
       ctx.save()
@@ -274,18 +314,6 @@ class NodeCollection
 
 
   mousedown: (pos, idx, t) ->
-    for n in @nodes
-      if n.isHit(pos)
-        if @merging?
-          if n isnt @merging.node
-            @mergeNodes(@merging.node, n)
-            @merging = null
-
-            return true
-
-    if @merging?
-      @merging = null
-
     # try moving nodes
     for n in @nodes
       hit = n.tryAll( (node) ->
@@ -308,7 +336,7 @@ class NodeCollection
     if @isHandleHit(pos, idx)
       @dropdown_menu = {
         pos: pos
-        options: collection_dropdown_menu
+        options: @collection_dropdown_menu
         selected: -1
       }
     return false
@@ -318,6 +346,8 @@ class NodeCollection
     dy = pos.y - default_node_radius*(2 + 3 * idx)
 
     return dx*dx + dy*dy < default_node_radius*default_node_radius
+
+  collection_dropdown_menu: collection_dropdown_menu
 
   mousemove: (pos) ->
     if @dropdown_menu?
@@ -336,18 +366,22 @@ class NodeCollection
 
       s.node.move(newx, newy)
 
-    if @merging?
-      @merging.x = pos.x
-      @merging.y = pos.y
-
     return
 
+  # may return a new replacement object, otherwise returns same object
   mouseup: (pos, t) ->
     if @dropdown_menu?
       if @dropdown_menu.selected >= 0
         @dropdown_menu.options[@dropdown_menu.selected].action(this, t)
       @dropdown_menu = null
-      return
+
+      if @reconstruct_as?
+        newcollection = new @reconstruct_as(this.shape)
+        newcollection.copyNodesFrom(this)
+        delete @reconstructas
+        return newcollection
+      else
+        return this
 
     if @selected?
       if t - @selected.t < 200
@@ -356,23 +390,12 @@ class NodeCollection
         if mdx*mdx+mdy*mdy < 10*10
           # call it a click
 
-          if @selected.node in @nodes
-            @merging =
-              node: @selected.node
-              x: pos.x
-              y: pos.y
-
+          @clickend(pos, t)
     @selected = null
 
-    return
+    return this
 
-  mergeNodes: (node0, node1) ->
-    # filter both out of the list
-    @nodes = ( n for n in @nodes when n isnt node0 and n isnt node1 )
-    newnode = new Inner(node0.value + node1.value, node0, node1, @shape)
-    newnode.x = (node0.x + node1.x) / 2
-    newnode.y = Math.min(node0.y, node1.y) - Math.abs(node0.x - node1.x)
-    @nodes.push(newnode)
+  clickend: ->
 
   makeLineupAnim: (yoffset, duration, t) ->
     midpointy = 0
@@ -429,6 +452,72 @@ class NodeCollection
     @animations = @animations.concat(anims)
 
     return
+
+
+class HuffmanNodeCollection extends NodeCollection
+  constructor: (shape) ->
+    super shape
+
+  copyNodesFrom: (nc) ->
+    @nodes = nc.nodes
+
+  mousedown: (pos, idx, t) ->
+    for n in @nodes
+      if n.isHit(pos)
+        if @merging?
+          if n isnt @merging.node
+            @mergeNodes(@merging.node, n)
+            @merging = null
+
+            return true
+
+    if @merging?
+      @merging = null
+
+    super pos, idx, t
+
+  mousemove: (pos) ->
+    super pos
+
+    if @merging?
+      @merging.x = pos.x
+      @merging.y = pos.y
+    return
+
+  collection_dropdown_menu: huffman_collection_dropdown_menu
+
+  mergeNodes: (node0, node1) ->
+    # filter both out of the list
+    @nodes = ( n for n in @nodes when n isnt node0 and n isnt node1 )
+    newnode = new Inner(node0.value + node1.value, node0, node1, @shape)
+    newnode.x = (node0.x + node1.x) / 2
+    newnode.y = Math.min(node0.y, node1.y) - Math.abs(node0.x - node1.x)
+    @nodes.push(newnode)
+
+  clickend: (pos, t) ->
+    if @selected.node in @nodes
+      @merging =
+        node: @selected.node
+        x: pos.x
+        y: pos.y
+    else
+      super pos, t
+
+  render: (ctx, idx, t) ->
+    if @merging?
+      ctx.save()
+      setStyle(ctx, light_link_style)
+      ctx.beginPath()
+      ctx.moveTo(@merging.node.x, @merging.node.y)
+      ctx.lineTo(@merging.x, @merging.y)
+      ctx.stroke()
+      ctx.restore()
+
+    super ctx, idx, t
+    
+
+class ShannonFanoNodeCollection extends NodeCollection
+
 
 lerp2d = (t, p0, p1) ->
   if t < 0
@@ -528,5 +617,4 @@ canvas.addEventListener 'mousemove', (e) ->
 canvas.addEventListener 'mouseup', (e) ->
   t = Date.now()/1000
   pos = getCursorPosition(canvas, e)
-  for collection in collections
-    collection.mouseup(pos, t)
+  collections = (collection.mouseup(pos, t) for collection in collections)
