@@ -232,10 +232,12 @@ class ShannonFanoNode extends Node
 
   addNode: (node) ->
     @contains.push(node)
+    node.parent = this
     @update()
 
   removeNode: (remove_node) ->
     @contains = (n for n in @contains when n isnt remove_node)
+    remove_node.parent = null
     @update()
 
   isHit: (pos) ->
@@ -647,22 +649,27 @@ class ShannonFanoNodeCollection extends NodeCollection
     return
 
   mouseup: (pos, t) ->
-    retval = super(pos,t)
-    for n in @nodes
-      if n.update?
-        n.update()
+    if @selected? and @selected.node.parent? and
+       not @selected.node.parent.isHit(pos)
+      # move into the sibling
+      this_node = @selected.node.parent
+      other_node = this_node.sibling
+      this_node.removeNode(@selected.node)
+      other_node.addNode(@selected.node)
 
-    return retval
+    super(pos,t)
 
   clickend: (pos, t) ->
-    if @selected.node in @nodes
-      @splitting = node: @selected.node, pos0: pos, pos1: pos
-    else
-      super pos, t
+    @splitting = node: @selected.node, pos0: pos, pos1: pos
 
   splitNode: (node, pos0, pos1) ->
     new0 = new ShannonFanoNode(node.contains, @shape, @defaultBBoxAt(pos0), 0)
     new1 = new ShannonFanoNode([], @shape, @defaultBBoxAt(pos1), 1)
+    new0.sibling = new1
+    new1.sibling = new0
+
+    for n in node.contains
+      n.parent = new0
 
     newnode = new Inner(node.value, new0, new1, @shape)
 
