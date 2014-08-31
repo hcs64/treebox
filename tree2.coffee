@@ -188,7 +188,7 @@ class ShannonFanoNode extends Node
     ctx.save()
     ctx.scale(@len_x,@len_y)
     ctx.beginPath()
-    renderShape(ctx, @shape, 1)
+    renderShape(ctx, @shape, .5)
     # fix line width
     ctx.scale(1/@len_x, 1/@len_y)
     ctx.fill()
@@ -197,9 +197,9 @@ class ShannonFanoNode extends Node
 
     setStyle(ctx, node_text_style)
     ctx.textAlign = 'center'
-    ctx.textBaseline = 'top'
+    ctx.textBaseline = 'bottom'
 
-    ctx.fillText(@label + ":" + @value,0,@len_y)
+    ctx.fillText(@value, 0, -@len_y/2)
 
     ctx.restore()
 
@@ -224,8 +224,8 @@ class ShannonFanoNode extends Node
 
       @x = (maxx+minx)/2
       @y = (maxy+miny)/2
-      @len_x = maxx-minx+default_node_radius*2
-      @len_y = maxy-miny+default_node_radius*3
+      @len_x = maxx-minx+default_node_radius*6
+      @len_y = maxy-miny+default_node_radius*6
     else
       @len_x = @default_bbox.len.x
       @len_y = @default_bbox.len.y
@@ -657,10 +657,20 @@ class ShannonFanoNodeCollection extends NodeCollection
       this_node.removeNode(@selected.node)
       other_node.addNode(@selected.node)
 
-    super(pos,t)
+    return_value = super(pos,t)
+    
+    updateFn = (node) ->
+      if node.update?
+        node.update()
+    
+    for n in @nodes
+      n.forAll(updateFn)
+
+    return return_value
 
   clickend: (pos, t) ->
-    @splitting = node: @selected.node, pos0: pos, pos1: pos
+    if @selected.node.contains.length > 1
+      @splitting = node: @selected.node, pos0: pos, pos1: pos
 
   splitNode: (node, pos0, pos1) ->
     new0 = new ShannonFanoNode(node.contains, @shape, @defaultBBoxAt(pos0), 0)
