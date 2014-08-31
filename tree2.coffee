@@ -171,23 +171,26 @@ class Inner extends Node
     fn(this)
 
 class ShannonFanoNode extends Node
-  constructor: (@contains, @shape, @def_bbox, @label) ->
+  constructor: (@contains, @shape, @default_bbox, @label) ->
+    @len_x = @default_bbox.len.x
+    @len_y = @default_bbox.len.y
+    @x = @default_bbox.min.x + @len_x/2
+    @y = @default_bbox.min.y + @len_y/2
+
     @update()
 
   render: (ctx) ->
 
     ctx.save()
     setStyle(ctx, node_style)
-    ctx.translate(
-      @bbox.min.x + @bbox.len.x/2,
-      @bbox.min.y + @bbox.len.y/2)
+    ctx.translate(@x, @y)
 
     ctx.save()
-    ctx.scale(@bbox.len.x,@bbox.len.y)
+    ctx.scale(@len_x,@len_y)
     ctx.beginPath()
-    renderShape(ctx, @shape, .75)
+    renderShape(ctx, @shape, 1)
     # fix line width
-    ctx.scale(1/@bbox.len.x, 1/@bbox.len.y)
+    ctx.scale(1/@len_x, 1/@len_y)
     ctx.fill()
     ctx.stroke()
     ctx.restore()
@@ -196,20 +199,15 @@ class ShannonFanoNode extends Node
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
 
-    ctx.fillText(@label + ":" + @value,0,@bbox.len.y)
+    ctx.fillText(@label + ":" + @value,0,@len_y)
 
     ctx.restore()
 
     for n in @contains
       n.render(ctx)
 
-
   update: ->
-    @bbox = @def_bbox
     @value = 0
-#      min: x: @bbox0.min.x + @bbox0.len.x*2, y:
-#                @bbox0.min.y
-#        len: x: default_node_radius * 2, y: default_node_radius * 2
 
     if @contains.length > 0
       minx = maxx = @contains[0].x
@@ -224,13 +222,13 @@ class ShannonFanoNode extends Node
         miny = Math.min(miny, n.y)
         maxy = Math.max(maxy, n.y)
 
-      @bbox =
-        min: x: minx-default_node_radius, y: miny-default_node_radius
-        len: x: maxx-minx+default_node_radius*2, y:
-                maxy-miny+default_node_radius*3
-
-    @x = @bbox.min.x + @bbox.len.x/2
-    @y = @bbox.min.y + @bbox.len.y/2
+      @x = (maxx+minx)/2
+      @y = (maxy+miny)/2
+      @len_x = maxx-minx+default_node_radius*2
+      @len_y = maxy-miny+default_node_radius*3
+    else
+      @len_x = @default_bbox.len.x
+      @len_y = @default_bbox.len.y
 
   addNode: (node) ->
     @contains.push(node)
@@ -241,14 +239,13 @@ class ShannonFanoNode extends Node
     @update()
 
   isHit: (pos) ->
-    (pos.x >= @bbox.min.x && pos.x - @bbox.min.x < @bbox.len.x) and
-    (pos.y >= @bbox.min.y && pos.y - @bbox.min.y < @bbox.len.y)
+    (@x - pos.x <= @len_x/2 && pos.x - @x < @len_x/2) and
+    (@y - pos.y <= @len_y/2 && pos.y - @y < @len_y/2)
 
   forAll: (fn) ->
     for n in @contains
       n.forAll(fn)
     fn(this)
-    @update()
 
   tryAll: (fn) ->
     for n in @contains
@@ -257,10 +254,6 @@ class ShannonFanoNode extends Node
         return result
 
     fn(this)
-
-  move: (newx, newy) ->
-    super(newx, newy)
-    @update()
 
 collection_dropdown_menu = [
   {
@@ -604,7 +597,7 @@ class ShannonFanoNodeCollection extends NodeCollection
 
   defaultBBoxAt: (pos) ->
     min: (x: pos.x - default_node_radius*2, y: pos.y - default_node_radius*2)
-    len: (x: default_node_radius*4, y: default_node_radius*4)
+    len: (x: default_node_radius*4, y: default_node_radius*2)
 
   copyNodesFrom: (nc) ->
     @nodes = [
@@ -676,6 +669,7 @@ class ShannonFanoNodeCollection extends NodeCollection
     new0.move(pos0.x, pos0.y)
     newnode.x = node.x
     newnode.y = node.y
+
     @replaceNode(node, newnode)
 
   replaceNode: (oldnode, newnode) ->
