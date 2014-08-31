@@ -385,6 +385,9 @@ class NodeCollection
     return new CollectionAnimation([new NodeAnimation(node, dest, duration)], t)
 
   sortNodes: (compare, t) ->
+    if @nodes.length == 1
+      return
+
     anims = []
     anims.push(@makeLineupAnim(default_node_radius*2, .1, t))
 
@@ -421,6 +424,7 @@ class NodeCollection
 
     @animations = @animations.concat(anims)
 
+    return
 
 lerp2d = (t, p0, p1) ->
   if t < 0
