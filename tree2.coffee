@@ -623,22 +623,14 @@ class ShannonFanoNodeCollection extends NodeCollection
   collection_dropdown_menu: shannon_fano_dropdown_menu
 
   mousedown: (pos, idx, t) ->
+    if super(pos, idx, t)
+      return true
+
     if @splitting?
-      hit_another = false
-      for n in @nodes
-        if n.isHit(pos)
-          hit_another = true
-          break
-
-      if not hit_another
-        @splitNode(@splitting.node, @splitting.pos0, @splitting.pos1)
-        @splitting = null
-        return true
-
+      @splitNode(@splitting.node, @splitting.pos0, @splitting.pos1)
       @splitting = null
+      return true
 
-    super pos, idx, t
-  
   mousemove: (pos) ->
     super pos
 
@@ -669,7 +661,9 @@ class ShannonFanoNodeCollection extends NodeCollection
     return return_value
 
   clickend: (pos, t) ->
-    if @selected.node.contains.length > 1
+    if @splitting
+      @splitting = null
+    else if @selected.node.contains.length > 1
       @splitting = node: @selected.node, pos0: pos, pos1: pos
 
   splitNode: (node, pos0, pos1) ->
