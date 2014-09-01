@@ -1,38 +1,60 @@
+collections = []
+
 # keyboard input
 pendingString = ''
-collections = []
 
 engage = (str) ->
   if str.length == 0
     return
-
+  
   direct_message = false
 
-  letters = {}
-  for c in str
-    if c of letters
-      # letter is repeated, we are dealing with a message directly
-      direct_message = true
-      break
-    else
-      letters[c] = frequency[c]
+  shapes = ['circle','square','diamond']
+  shape = shapes[collections.length % shapes.length]
+  pos = (x: canvas.width/2, y: canvas.height/2 +
+              collections.length * default_node_radius * 4)
 
-  if direct_message
+  if str[0] == ':'
+    # making a CodeListCollection for letter->code pairs
+
+    code_pairs = str[1..].split(',')
+    codes = {}
+    for pair in code_pairs
+      [symbol, code] = pair.split('=')
+      codes[symbol] = code
+
+    if collections.length < 1 or
+       not (collections[collections.length-1] instanceof CodeListCollection)
+      collection = new CodeListCollection(shape)
+      collections.push(collection)
+    else
+      collection = collections[collections.length-1]
+      pos.y -= default_node_radius * 4
+
+    collection.addCodes(codes, pos)
+  else
+    # making a NodeCollection for a group of letters
+
     letters = {}
     for c in str
       if c of letters
-        letters[c] += 1
+        # letter is repeated, we are dealing with a message directly
+        direct_message = true
+        break
       else
-        letters[c] = 1
+        letters[c] = frequency[c]
 
-  shapes = ['circle','square','diamond']
-  collection = new NodeCollection(shapes[collections.length % shapes.length])
-  collection.addLeaves(
-    letters,
-    (x: canvas.width/2, y: canvas.height/2 +
-                           collections.length * default_node_radius * 4)
-  )
-  collections.push(collection)
+    if direct_message
+      letters = {}
+      for c in str
+        if c of letters
+          letters[c] += 1
+        else
+          letters[c] = 1
+
+    collection = new NodeCollection(shape)
+    collection.addLeaves( letters, pos )
+    collections.push(collection)
 
   return
 
@@ -42,9 +64,10 @@ node_emph_style = stroke: 'white', width: 5.5, fill: 'black'
 link_style = stroke: 'white', width: 1.5
 light_link_style = stroke: 'white', width: .5
 node_text_style = fill: 'white', font: '16px monospace'
+node_text_spacing = 18
 menu_text_style = fill: 'white', font: '16px sans'
 menu_text_invert_style = fill: 'black', font: '16px sans'
-menu_text_height = 18
+menu_text_spacing = 18
 
 setStyle = (ctx, s) ->
   ctx.fillStyle   = s.fill   if s.fill
@@ -257,6 +280,16 @@ class ShannonFanoNode extends Node
 
     fn(this)
 
+class CodeNode extends Node
+  constructor: (@symbol, @code) ->
+    @error = null
+
+  render: (ctx) ->
+    ctx.save()
+    setStyle(ctx, node_text_style)
+    ctx.fillText("#{@symbol} = #{@code}", @x, @y)
+    ctx.restore()
+
 collection_dropdown_menu = [
   {
     name: 'sort by weight',
@@ -388,9 +421,9 @@ class NodeCollection
         ctx.fillStyle= if @dropdown_menu.selected == i then 'white' else 'black'
         ctx.fillRect(
           @dropdown_menu.pos.x,
-          @dropdown_menu.pos.y + menu_text_height * (i+1),
+          @dropdown_menu.pos.y + menu_text_spacing * (i+1),
           measure.width,
-          menu_text_height)
+          menu_text_spacing)
 
         setStyle(ctx, if @dropdown_menu.selected == i
             menu_text_invert_style
@@ -399,7 +432,7 @@ class NodeCollection
 
         ctx.fillText(option.name,
           @dropdown_menu.pos.x,
-          @dropdown_menu.pos.y + menu_text_height * (i+1))
+          @dropdown_menu.pos.y + menu_text_spacing * (i+1))
 
       ctx.restore()
     return
@@ -446,8 +479,8 @@ class NodeCollection
       @dropdown_menu.selected = -1
       for option, i in @dropdown_menu.options
         if pos.x > @dropdown_menu.pos.x and
-           pos.y >= @dropdown_menu.pos.y + menu_text_height * (i+1) and
-           pos.y <  @dropdown_menu.pos.y + menu_text_height * (i+2)
+           pos.y >= @dropdown_menu.pos.y + menu_text_spacing * (i+1) and
+           pos.y <  @dropdown_menu.pos.y + menu_text_spacing * (i+2)
           @dropdown_menu.selected = i
       return
 
@@ -715,14 +748,6 @@ class ShannonFanoNodeCollection extends NodeCollection
 
     return
  
-lerp2d = (t, p0, p1) ->
-  if t < 0
-    t = 0
-  if t > 1
-    t = 1
-  x: (p1.x - p0.x)*t + p0.x
-  y: (p1.y - p0.y)*t + p0.y
-
 class NodeCollectionFromSF extends NodeCollection
   constructor:  (shape) ->
     super (shape)
@@ -745,6 +770,54 @@ class NodeCollectionFromSF extends NodeCollection
 
       return n
     @nodes = [rebuildFromSF(sf.nodes[0])]
+
+class CodeListCollection extends NodeCollection
+  constructor: (shape) ->
+    super shape
+    @codes = {}
+
+  addCodes: (codes, pos) ->
+    for symbol, code of codes
+      @addCode(symbol, code)
+
+    @arrangeCodes(pos.x, pos.y)
+
+  addCode: (symbol, code) ->
+    oldval = @codes[symbol]
+    newval = new CodeNode(symbol, code)
+
+    if oldval?
+      # replace it
+      @nodes = (
+        for n in @nodes
+          if n == oldval
+            newval
+          else
+            n
+      )
+    else
+      # append it
+      @nodes.push(newval)
+
+    @codes[symbol] = newval
+    # TODO: needs to check for errors, I think this should be done
+    # here even if it is less efficient just to be safe
+
+  arrangeCodes: (start_x, start_y) ->
+    y = start_y
+    for symbol, codeobj of @nodes
+      codeobj.x = start_x
+      codeobj.y = y
+      y += node_text_spacing
+
+lerp2d = (t, p0, p1) ->
+  if t < 0
+    t = 0
+  if t > 1
+    t = 1
+  x: (p1.x - p0.x)*t + p0.x
+  y: (p1.y - p0.y)*t + p0.y
+
 
 class NodeAnimation
   constructor: (@node, @destpos, @duration) ->

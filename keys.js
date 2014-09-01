@@ -26,16 +26,9 @@ var translateCharCode;
     t._0Code = '0'.charCodeAt(0);
     t._9Code = '9'.charCodeAt(0);
     t.etcCodes = {
-        ' ':true,
-        '.':true,
-        '*':true,
-        '+':true,
-        '-':true,
-        '\\':true,
-        '(':true,
-        ')':true,
-        '[':true,
-        ']':true,
+        ',':true,
+        ':':true,
+        '=':true,
     }
 
     translateCharCode = t;
