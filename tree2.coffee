@@ -309,9 +309,21 @@ shannon_fano_dropdown_menu = [
     name: 'finish Shannon-Fano',
     action: (c, t) ->
       console.log('finish Shannon-Fano')
-      # TODO: this definitely isn't going to work without the construction
-      # finished
-      c.reconstruct_as = NodeCollection
+
+      checkCompletion = (node) ->
+        if node.contains? and node.contains.length != 1
+          return false
+
+        result = true
+        if node.child0?
+          result = result and
+                   checkCompletion(node.child0) and checkCompletion(node.child1)
+        return result
+
+      if checkCompletion(c.nodes[0])
+        c.reconstruct_as = NodeCollectionFromSF
+      else
+        console.log('won\'t finish S-F, incomplete')
   }
 ]
 
@@ -710,6 +722,29 @@ lerp2d = (t, p0, p1) ->
     t = 1
   x: (p1.x - p0.x)*t + p0.x
   y: (p1.y - p0.y)*t + p0.y
+
+class NodeCollectionFromSF extends NodeCollection
+  constructor:  (shape) ->
+    super (shape)
+  copyNodesFrom: (sf) ->
+    rebuildFromSF = (node) =>
+      if node.contains?
+        nold = node.contains[0]
+        n = new Leaf(nold.value, nold.label, @shape)
+      else if node.child0?
+        n = new Inner(node.value,
+          rebuildFromSF(node.child0),
+          rebuildFromSF(node.child1),
+          @shape)
+      else
+        throw 'hit unhandled node'
+        return null
+
+      n.x = node.x
+      n.y = node.y
+
+      return n
+    @nodes = [rebuildFromSF(sf.nodes[0])]
 
 class NodeAnimation
   constructor: (@node, @destpos, @duration) ->
