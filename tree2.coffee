@@ -295,7 +295,7 @@ collection_dropdown_menu = [
     name: 'sort by weight',
     action: (c, t) ->
       console.log('sort by weight')
-      c.sortNodes( ((n1, n2) -> n2.value - n1.value), t)
+      c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
   },
   {
     name: 'Shannon-Fano',
@@ -316,7 +316,7 @@ huffman_collection_dropdown_menu = [
     name: 'sort by weight',
     action: (c, t) ->
       console.log('sort by weight')
-      c.sortNodes( ((n1, n2) -> n2.value - n1.value), t)
+      c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
   },
   {
     name: 'automatic Huffman step',
@@ -574,10 +574,10 @@ class NodeCollection
 
     @nodes = newnodes
 
+    return anims
+
+  addAnimations: (anims) ->
     @animations = @animations.concat(anims)
-
-    return
-
 
 class HuffmanNodeCollection extends NodeCollection
   constructor: (shape) ->
@@ -647,6 +647,8 @@ class ShannonFanoNodeCollection extends NodeCollection
     len: (x: default_node_radius*4, y: default_node_radius*2)
 
   copyNodesFrom: (nc) ->
+    anims = nc.sortNodes( ((n1, n2) -> n2.value - n1.value), 1)
+    @addAnimations(anims)
     @nodes = [
       new ShannonFanoNode(nc.nodes, @shape, @defaultBBoxAt((x:100,y:100)), "") ]
 
