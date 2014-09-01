@@ -724,7 +724,9 @@ class ShannonFanoNodeCollection extends NodeCollection
 
     newnode = new Inner(node.value, new0, new1, @shape)
 
-    new0.move(pos0.x, pos0.y)
+    new1.move(node.x, node.y)
+    @addAnimations([@makeMoveContainsAnim([new0,new1], [pos0,pos1], .2, -1)])
+
     newnode.x = node.x
     newnode.y = node.y
 
@@ -749,6 +751,21 @@ class ShannonFanoNodeCollection extends NodeCollection
         n
 
     return
+
+  makeMoveContainsAnim: (nodes, dests, duration, t) ->
+    anims = []
+
+    for node, idx in nodes
+      dest = dests[idx]
+      dx = dest.x - node.x
+      dy = dest.y - node.y
+
+      anims.push( new NodeAnimation(node, dest, duration) )
+
+      for n in node.contains
+        anims.push(new NodeAnimation(n, (x: n.x + dx, y: n.y + dy), duration))
+
+    return new CollectionAnimation(anims, t)
  
 class NodeCollectionFromSF extends NodeCollection
   constructor:  (shape) ->
