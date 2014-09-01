@@ -710,7 +710,7 @@ class ShannonFanoNodeCollection extends NodeCollection
   clickend: (pos, t) ->
     if @splitting
       @splitting = null
-    else if @selected.node.contains.length > 1
+    else if @selected.node.contains? and @selected.node.contains.length > 1
       @splitting = node: @selected.node, pos0: pos, pos1: pos
 
   splitNode: (node, pos0, pos1) ->
