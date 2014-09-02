@@ -548,7 +548,7 @@ class NodeCollection
 
   sortNodes: (compare, t) ->
     if @nodes.length == 1
-      return
+      return []
 
     anims = []
     anims.push(@makeLineupAnim(default_node_radius*2, .1, t))
@@ -614,8 +614,7 @@ class NodeCollection
           children_width += cb.width
           children_max_height = Math.max(children_max_height, cb.height)
 
-        width = Math.max(width,
-          children_width + (children.length-1) * default_node_radius)
+        width = Math.max(width, children_width)
         height = Math.max(height,
           children_max_height + 2 * default_node_radius)
 
@@ -629,10 +628,10 @@ class NodeCollection
             pos: ( x: x + children_bounds[idx].width/2, y:
                       default_node_radius * 3 )
           )
-          x += children_bounds[idx].width + default_node_radius
+          x += width / children.length
 
-      width: width + default_node_radius * 2
-      height: height + default_node_radius * 2
+      width: width + default_node_radius
+      height: height + default_node_radius
 
     getBounds(tree)
 
