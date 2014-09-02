@@ -157,10 +157,14 @@ class Leaf extends Node
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
-    if @label.length > 0
-      ctx.fillText(@label,0,2*@radius)
+    if @value? && ((@value.length? && @value.length > 0) || @value > 0)
+      ctx.fillText(@value, 0, 0)
 
-    ctx.fillText(@value, 0, 0)
+      if @label? && @label.length > 0
+        ctx.fillText(@label, 0, 2*@radius)
+    else if @label? && @label.length >0
+      ctx.fillText(@label, 0, 0)
+
     ctx.restore()
 
 class Inner extends Node
@@ -187,7 +191,8 @@ class Inner extends Node
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
-    ctx.fillText(@value, 0, 0)
+    if @value?
+      ctx.fillText(@value, 0, 0)
     ctx.restore()
  
     if @child0?
@@ -328,18 +333,6 @@ class CodeNode extends Node
 
 collection_dropdown_menu = [
   {
-    name: 'sort by weight',
-    action: (c, t) ->
-      console.log('sort by weight')
-      c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
-  },
-  {
-    name: 'delete'
-    action: (c, t) ->
-      console.log('delete')
-      c.delete_flag = true
-  },
-  {
     name: 'tidy',
     action: (c, t) ->
       console.log('tidy trees')
@@ -350,17 +343,44 @@ collection_dropdown_menu = [
         console.log('not attempting to tidy multiple trees')
   },
   {
+    name: 'remove values'
+    action: (c, t) ->
+      console.log('remove values')
+      c.removeValues()
+  },
+  {
     name: 'Shannon-Fano',
     action: (c, t) ->
       console.log('Shannon-Fano')
-      c.reconstruct_as = ShannonFanoNodeCollection
+      if not c.nodes[0].value?
+        console.log('values required for Shannon-Fano')
+      else
+        c.reconstruct_as = ShannonFanoNodeCollection
   },
   {
     name: 'Huffman',
     action: (c, t) ->
       console.log('Huffman')
-      c.reconstruct_as = HuffmanNodeCollection
-  }
+      if not c.nodes[0].value?
+        console.log('values required for Huffman')
+      else
+        c.reconstruct_as = HuffmanNodeCollection
+  },
+  {
+    name: 'sort by weight',
+    action: (c, t) ->
+      console.log('sort by weight')
+      if not c.nodes[0].value?
+        console.log('weights/values required to sort by weight')
+      else
+        c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
+  },
+  {
+    name: 'delete'
+    action: (c, t) ->
+      console.log('delete')
+      c.delete_flag = true
+  },
 ]
 
 huffman_collection_dropdown_menu = [
@@ -725,6 +745,15 @@ class NodeCollection
       anims.push(new NodeAnimation(c, newpos, duration))
 
     @addAnimations([new CollectionAnimation(anims, -1)])
+
+  removeValues: () ->
+    rvFn = (node) ->
+      if node.value?
+        node.saved_value = node.value
+      delete node.value
+
+    for n in @nodes
+      n.forAll(rvFn)
 
 class HuffmanNodeCollection extends NodeCollection
   constructor: (shape) ->
