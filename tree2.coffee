@@ -1,8 +1,13 @@
 collections = []
 shapes = ['circle','square','hex']
 next_shape = 0
+construct_queue = []
 
-# keyboard input
+nextPos = () ->
+  x: canvas.width/2,
+  y: canvas.height/2 + collections.length * default_node_radius * 4
+
+# process keyboard input
 pendingString = ''
 
 engage = (str) ->
@@ -11,8 +16,7 @@ engage = (str) ->
   
   direct_message = false
 
-  pos = (x: canvas.width/2, y: canvas.height/2 +
-              collections.length * default_node_radius * 4)
+  pos = nextPos()
 
   if str[0] == ':'
     # making a CodeListCollection for letter->code pairs
@@ -166,10 +170,12 @@ class Inner extends Node
     ctx.save()
     setStyle(ctx, link_style)
     ctx.beginPath()
-    ctx.moveTo(@x, @y)
-    ctx.lineTo(@child0.x, @child0.y)
-    ctx.moveTo(@x, @y)
-    ctx.lineTo(@child1.x, @child1.y)
+    if @child0?
+      ctx.moveTo(@x, @y)
+      ctx.lineTo(@child0.x, @child0.y)
+    if @child1?
+      ctx.moveTo(@x, @y)
+      ctx.lineTo(@child1.x, @child1.y)
     ctx.stroke()
     ctx.restore()
 
@@ -184,22 +190,28 @@ class Inner extends Node
     ctx.fillText(@value, 0, 0)
     ctx.restore()
  
-    @child0.render(ctx)
-    @child1.render(ctx)
+    if @child0?
+      @child0.render(ctx)
+    if @child1?
+      @child1.render(ctx)
 
   forAll: (fn) ->
-    @child0.forAll(fn)
-    @child1.forAll(fn)
+    if @child0?
+      @child0.forAll(fn)
+    if @child1?
+      @child1.forAll(fn)
     fn(this)
 
   tryAll: (fn) ->
-    result = @child0.tryAll(fn)
-    if result?
-      return result
+    if @child0
+      result = @child0.tryAll(fn)
+      if result?
+        return result
 
-    result = @child1.tryAll(fn)
-    if result?
-      return result
+    if @child1
+      result = @child1.tryAll(fn)
+      if result?
+        return result
 
     fn(this)
 
@@ -333,7 +345,7 @@ collection_dropdown_menu = [
       console.log('tidy trees')
       if c.nodes.length == 1
         n = c.nodes[0]
-        c.tidy(t, n, (x: n.x, y: n.y))
+        c.tidy(n, (x: n.x, y: n.y))
       else
         console.log('not attempting to tidy multiple trees')
   },
@@ -399,6 +411,22 @@ shannon_fano_dropdown_menu = [
         console.log('won\'t finish S-F, incomplete')
   }
 ]
+
+code_list_dropdown_menu = [
+  {
+    name: 'convert to tree',
+    action: (c, t) ->
+      console.log('convert to tree')
+      c.convertToTree()
+  },
+  {
+    name: 'delete'
+    action: (c, t) ->
+      console.log('delete')
+      c.delete_flag = true
+  },
+]
+
 
 class NodeCollection
   constructor: (@shape) ->
@@ -621,7 +649,7 @@ class NodeCollection
   addAnimations: (anims) ->
     @animations = @animations.concat(anims)
 
-  tidy: (tidy, tree, tree_pos) ->
+  tidy: (tree, tree_pos) ->
     rel_pos = []
 
     calcBounds = (node) ->
@@ -682,6 +710,7 @@ class NodeCollection
       pidx = moved_nodes.indexOf(p)
       ppos = new_positions[pidx]
 
+      console.log(pos.x, pos.y, ppos.x, ppos.y)
       newpos = (x: ppos.x + pos.x, y: ppos.y + pos.y)
       new_positions.push(newpos)
       moved_nodes.push(c)
@@ -907,6 +936,8 @@ class CodeListCollection extends NodeCollection
     @codes = {}
     @errors = false
 
+  collection_dropdown_menu: code_list_dropdown_menu
+
   addCodes: (codes, pos) ->
     for symbol, code of codes
       @addCode(symbol, code)
@@ -958,7 +989,7 @@ class CodeListCollection extends NodeCollection
       if not ok
         codeobj.error = [(start: 0, end: codeobj.code.length)]
 
-    return
+    return @errors
 
   arrangeCodes: (start_x, start_y) ->
     y = start_y
@@ -978,6 +1009,62 @@ class CodeListCollection extends NodeCollection
         n.y += dy
     else
       super pos
+
+
+  convertToTree: () ->
+    if @checkForErrors()
+      throw 'not going to convert with errors'
+
+    root = {}
+    for symbol, codeobj of @codes
+      c = codeobj.code
+      curnode = root
+      for i in [0...c.length]
+        ci = c[i]
+        if ci == '0'
+          childstr = 'child0'
+        else if ci == '1'
+          childstr = 'child1'
+        else
+          throw 'bad character ' + ci
+
+        if curnode[childstr]?
+          curnode = curnode[childstr]
+        else
+          curnode = curnode[childstr] = {}
+
+      curnode.leaf = symbol
+
+    construct_queue.push((const: NodeCollectionFromCode, add_from: root))
+
+class NodeCollectionFromCode extends NodeCollection
+  constructor:  (shape) ->
+    super (shape)
+  setNodes: (tree, pos) ->
+    rebuildFromTree = (node) =>
+      if node.leaf?
+        newnode = new Leaf('',node.leaf,@shape)
+      else
+        if node.child0?
+          newchild0 = rebuildFromTree(node.child0)
+        else
+          newchild0 = null
+        if node.child1?
+          newchild1 = rebuildFromTree(node.child1)
+        else
+          newchild1 = null
+
+        newnode = new Inner('', newchild0, newchild1, @shape)
+
+      newnode.x = pos.x
+      newnode.y = pos.y
+      return newnode
+
+    @nodes = [rebuildFromTree(tree)]
+    @tidy(@nodes[0], pos)
+
+    return
+
 
 lerp2d = (t, p0, p1) ->
   if t < 0
@@ -1078,5 +1165,21 @@ canvas.addEventListener 'mousemove', (e) ->
 canvas.addEventListener 'mouseup', (e) ->
   t = Date.now()/1000
   pos = getCursorPosition(canvas, e)
+
+  # process collections, possibly replacing with conversions
   collections = (c.mouseup(pos, t) for c in collections)
+  
+  # filter out deleted (null) collections
   collections = (c for c in collections when c isnt null)
+
+  # construct new collections
+  while construct_queue.length > 0
+    c = construct_queue.shift()
+    collection = new c.const(shapes[next_shape])
+    next_shape = (next_shape + 1) % shapes.length
+    collection.setNodes(c.add_from, nextPos())
+    collections.push(collection)
+
+  # TODO: Each of these has subtly different semantics, and within the
+  # conversion mechanism there are a few variants as well, this should be2
+  # handled more cleanly
