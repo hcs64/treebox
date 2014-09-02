@@ -783,10 +783,12 @@ class HuffmanNodeCollection extends WeightedNodeCollection
       for n in @nodes
         if n.isHit(pos)
           if n isnt @merging.node
-            @mergeNodes(@merging.node, n)
-            @merging = null
-
-            return true
+            if @merging.node.x < n.x
+              @mergeNodes(@merging.node, n)
+              @merging = null
+              return true
+            else
+              console.log('abort merge from right to left')
 
       @merging = null
 
