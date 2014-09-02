@@ -1,4 +1,6 @@
 collections = []
+shapes = ['circle','square','hex']
+next_shape = 0
 
 # keyboard input
 pendingString = ''
@@ -9,8 +11,6 @@ engage = (str) ->
   
   direct_message = false
 
-  shapes = ['circle','square','diamond']
-  shape = shapes[collections.length % shapes.length]
   pos = (x: canvas.width/2, y: canvas.height/2 +
               collections.length * default_node_radius * 4)
 
@@ -25,7 +25,7 @@ engage = (str) ->
 
     if collections.length < 1 or
        not (collections[collections.length-1] instanceof CodeListCollection)
-      collection = new CodeListCollection(shape)
+      collection = new CodeListCollection('diamond')
       collections.push(collection)
     else
       collection = collections[collections.length-1]
@@ -52,7 +52,8 @@ engage = (str) ->
         else
           letters[c] = 1
 
-    collection = new NodeCollection(shape)
+    collection = new NodeCollection(shapes[next_shape])
+    next_shape = (next_shape + 1) % shapes.length
     collection.addLeaves( letters, pos )
     collections.push(collection)
 
@@ -90,6 +91,14 @@ renderShape = (ctx, shape, radius) ->
       ctx.lineTo(0,+radius*Math.SQRT2)
       ctx.lineTo(+radius*Math.SQRT2,0)
       ctx.lineTo(0,-radius*Math.SQRT2)
+      ctx.closePath()
+    when 'hex'
+      ctx.moveTo(-radius,0)
+      ctx.lineTo(-radius/2,-radius)
+      ctx.lineTo(+radius/2,-radius)
+      ctx.lineTo(+radius,0)
+      ctx.lineTo(+radius/2,+radius)
+      ctx.lineTo(-radius/2,+radius)
       ctx.closePath()
 
   return
