@@ -37,7 +37,7 @@ engage = (str) ->
 
     collection.addCodes(codes, pos)
   else
-    # making a NodeCollection for a group of letters
+    # making a WeightedNodeCollection for a group of letters
 
     letters = {}
     for c in str
@@ -56,7 +56,7 @@ engage = (str) ->
         else
           letters[c] = 1
 
-    collection = new NodeCollection(shapes[next_shape])
+    collection = new WeightedNodeCollection(shapes[next_shape])
     next_shape = (next_shape + 1) % shapes.length
     collection.addLeaves( letters, pos )
     collections.push(collection)
@@ -343,43 +343,53 @@ collection_dropdown_menu = [
         console.log('not attempting to tidy multiple trees')
   },
   {
-    name: 'remove values'
+    name: 'delete'
     action: (c, t) ->
-      console.log('remove values')
-      c.removeValues()
+      console.log('delete')
+      c.delete_flag = true
+  },
+]
+
+weighted_collection_dropdown_menu = [
+  {
+    name: 'tidy',
+    action: (c, t) ->
+      console.log('tidy trees')
+      if c.nodes.length == 1
+        n = c.nodes[0]
+        c.tidy(n, (x: n.x, y: n.y))
+      else
+        console.log('not attempting to tidy multiple trees')
   },
   {
     name: 'Shannon-Fano',
     action: (c, t) ->
       console.log('Shannon-Fano')
-      if not c.nodes[0].value?
-        console.log('values required for Shannon-Fano')
-      else
-        c.reconstruct_as = ShannonFanoNodeCollection
+      c.reconstruct_as = ShannonFanoNodeCollection
   },
   {
     name: 'Huffman',
     action: (c, t) ->
       console.log('Huffman')
-      if not c.nodes[0].value?
-        console.log('values required for Huffman')
-      else
-        c.reconstruct_as = HuffmanNodeCollection
+      c.reconstruct_as = HuffmanNodeCollection
   },
   {
     name: 'sort by weight',
     action: (c, t) ->
       console.log('sort by weight')
-      if not c.nodes[0].value?
-        console.log('weights/values required to sort by weight')
-      else
-        c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
+      c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
   },
   {
     name: 'delete'
     action: (c, t) ->
       console.log('delete')
       c.delete_flag = true
+  },
+  {
+    name: 'remove values'
+    action: (c, t) ->
+      console.log('remove values')
+      c.reconstruct_as = NodeCollection
   },
 ]
 
@@ -400,7 +410,7 @@ huffman_collection_dropdown_menu = [
     action: (c, t) ->
       console.log('finish Huffman')
       # TODO: maybe first this should automatically finish the construction?
-      c.reconstruct_as = NodeCollection
+      c.reconstruct_as = WeightedNodeCollection
   }
 ]
 
@@ -426,7 +436,7 @@ shannon_fano_dropdown_menu = [
         return result
 
       if checkCompletion(c.nodes[0])
-        c.reconstruct_as = NodeCollectionFromSF
+        c.reconstruct_as = WeightedNodeCollectionFromSF
       else
         console.log('won\'t finish S-F, incomplete')
   }
@@ -447,28 +457,21 @@ code_list_dropdown_menu = [
   },
 ]
 
-
 class NodeCollection
   constructor: (@shape) ->
     @nodes = []
     @animations = []
 
-  copyNodesFrom: (nc) ->
+  takeNodesFrom: (nc) ->
     @nodes = nc.nodes
 
-  addLeaves: (dict, pos) ->
-    length = 0
-    for value of dict
-      length += 1
+    rvFn = (node) ->
+      if node.value?
+        node.saved_value = node.value
+      delete node.value
 
-    i = 0
-    for label, value of dict
-      leaf = new Leaf(value, label, @shape)
-      @nodes.push(leaf)
-      leaf.x = pos.x + (i / length - .5 ) * 3 * leaf.radius * length
-      leaf.y = pos.y
-
-      i += 1
+    for n in @nodes
+      n.forAll(rvFn)
 
   render: (ctx, idx, t) ->
     if @animations.length > 0
@@ -592,7 +595,7 @@ class NodeCollection
         return null
       else if @reconstruct_as?
         newcollection = new @reconstruct_as(this.shape)
-        newcollection.copyNodesFrom(this)
+        newcollection.takeNodesFrom(this)
         delete @reconstruct_as
         return newcollection
       else
@@ -625,46 +628,6 @@ class NodeCollection
 
   makeMove1Anim: (node, dest, duration, t) ->
     return new CollectionAnimation([new NodeAnimation(node, dest, duration)], t)
-
-  sortNodes: (compare, t) ->
-    if @nodes.length == 1
-      return []
-
-    anims = []
-    anims.push(@makeLineupAnim(default_node_radius*2, .1, t))
-
-    minx = @nodes[0].x
-    maxx = @nodes[0].x
-    totaly =  @nodes[0].y
-
-    for n in @nodes[1..]
-      totaly += n.y
-      minx = Math.min(n.x, minx)
-      maxx = Math.max(n.x, maxx)
-
-    desty = totaly / @nodes.length
-    width = Math.max(maxx - minx, @nodes.length * default_node_radius * 2)
-    spacing = width / (@nodes.length-1)
-
-    oldnodes = @nodes.slice(0) # clone
-    newnodes = []
-
-    while oldnodes.length > 0
-      max = oldnodes[0]
-      maxi = 0
-      for n,i in oldnodes[1..]
-        if compare(n, max) > 0
-          max = n
-          maxi = i+1
-
-      oldnodes = (n for n,i in oldnodes when i != maxi)
-      anims.push(@makeMove1Anim(max,
-        (x: minx+newnodes.length*spacing, y: desty), .1, -1))
-      newnodes.push(max)
-
-    @nodes = newnodes
-
-    return anims
 
   addAnimations: (anims) ->
     @animations = @animations.concat(anims)
@@ -746,16 +709,72 @@ class NodeCollection
 
     @addAnimations([new CollectionAnimation(anims, -1)])
 
-  removeValues: () ->
-    rvFn = (node) ->
-      if node.value?
-        node.saved_value = node.value
-      delete node.value
 
-    for n in @nodes
-      n.forAll(rvFn)
+class WeightedNodeCollection extends NodeCollection
+  constructor: (shape) ->
+    super shape
 
-class HuffmanNodeCollection extends NodeCollection
+  takeNodesFrom: (nc) ->
+    # override basic NodeCollection takeNodesFrom that strips weights
+    @nodes = nc.nodes
+
+  collection_dropdown_menu: weighted_collection_dropdown_menu
+
+  addLeaves: (dict, pos) ->
+    length = 0
+    for value of dict
+      length += 1
+
+    i = 0
+    for label, value of dict
+      leaf = new Leaf(value, label, @shape)
+      @nodes.push(leaf)
+      leaf.x = pos.x + (i / length - .5 ) * 3 * leaf.radius * length
+      leaf.y = pos.y
+
+      i += 1
+
+  sortNodes: (compare, t) ->
+    if @nodes.length == 1
+      return []
+
+    anims = []
+    anims.push(@makeLineupAnim(default_node_radius*2, .1, t))
+
+    minx = @nodes[0].x
+    maxx = @nodes[0].x
+    totaly =  @nodes[0].y
+
+    for n in @nodes[1..]
+      totaly += n.y
+      minx = Math.min(n.x, minx)
+      maxx = Math.max(n.x, maxx)
+
+    desty = totaly / @nodes.length
+    width = Math.max(maxx - minx, @nodes.length * default_node_radius * 2)
+    spacing = width / (@nodes.length-1)
+
+    oldnodes = @nodes.slice(0) # clone
+    newnodes = []
+
+    while oldnodes.length > 0
+      max = oldnodes[0]
+      maxi = 0
+      for n,i in oldnodes[1..]
+        if compare(n, max) > 0
+          max = n
+          maxi = i+1
+
+      oldnodes = (n for n,i in oldnodes when i != maxi)
+      anims.push(@makeMove1Anim(max,
+        (x: minx+newnodes.length*spacing, y: desty), .1, -1))
+      newnodes.push(max)
+
+    @nodes = newnodes
+
+    return anims
+
+class HuffmanNodeCollection extends WeightedNodeCollection
   constructor: (shape) ->
     super shape
 
@@ -814,7 +833,7 @@ class HuffmanNodeCollection extends NodeCollection
     super ctx, idx, t
     
 
-class ShannonFanoNodeCollection extends NodeCollection
+class ShannonFanoNodeCollection extends WeightedNodeCollection
   constructor: (shape) ->
     super shape
 
@@ -822,7 +841,7 @@ class ShannonFanoNodeCollection extends NodeCollection
     min: (x: pos.x - default_node_radius*2, y: pos.y - default_node_radius*2)
     len: (x: default_node_radius*4, y: default_node_radius*2)
 
-  copyNodesFrom: (nc) ->
+  takeNodesFrom: (nc) ->
     anims = nc.sortNodes( ((n1, n2) -> n2.value - n1.value), 1)
     @addAnimations(anims)
     @nodes = [
@@ -943,10 +962,10 @@ class ShannonFanoNodeCollection extends NodeCollection
 
     return new CollectionAnimation(anims, t)
  
-class NodeCollectionFromSF extends NodeCollection
+class WeightedNodeCollectionFromSF extends WeightedNodeCollection
   constructor:  (shape) ->
     super (shape)
-  copyNodesFrom: (sf) ->
+  takeNodesFrom: (sf) ->
     rebuildFromSF = (node) =>
       if node.contains?
         nold = node.contains[0]
