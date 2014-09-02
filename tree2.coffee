@@ -331,39 +331,43 @@ class CodeNode extends Node
     
     dy > 0 && dy < node_text_spacing && dx > 0 && dx < @width
 
+tidy_menu_item =
+  name: 'tidy',
+  action: (c, t) ->
+    console.log('tidy trees')
+    for n in c.nodes
+      c.tidy(n, (x: n.x, y: n.y))
+
+code_table_menu_item =
+  name: 'convert to code table'
+  action: (c, t) ->
+    console.log('convert to code table')
+    if c.nodes.length != 1
+      console.log('only can convert a single tree')
+    else
+      c.convertToCode()
+
+delete_menu_item =
+  name: 'delete'
+  action: (c, t) ->
+    console.log('delete')
+    c.delete_flag = true
+
+sort_menu_item =
+  name: 'sort by weight',
+  action: (c, t) ->
+    console.log('sort by weight')
+    c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
+
 collection_dropdown_menu = [
-  {
-    name: 'tidy',
-    action: (c, t) ->
-      console.log('tidy trees')
-      for n in c.nodes
-        c.tidy(n, (x: n.x, y: n.y))
-  },
-  {
-    name: 'convert to code table'
-    action: (c, t) ->
-      console.log('convert to code table')
-      if c.nodes.length != 1
-        console.log('only can convert a single tree')
-      else
-        c.convertToCode()
-  },
-  {
-    name: 'delete'
-    action: (c, t) ->
-      console.log('delete')
-      c.delete_flag = true
-  },
+  tidy_menu_item,
+  code_table_menu_item,
+  delete_menu_item,
 ]
 
 weighted_collection_dropdown_menu = [
-  {
-    name: 'tidy',
-    action: (c, t) ->
-      console.log('tidy trees')
-      for n in c.nodes
-        c.tidy(n, (x: n.x, y: n.y))
-  },
+  tidy_menu_item,
+  code_table_menu_item,
   {
     name: 'Shannon-Fano',
     action: (c, t) ->
@@ -376,18 +380,7 @@ weighted_collection_dropdown_menu = [
       console.log('Huffman')
       c.reconstruct_as = HuffmanNodeCollection
   },
-  {
-    name: 'sort by weight',
-    action: (c, t) ->
-      console.log('sort by weight')
-      c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
-  },
-  {
-    name: 'delete'
-    action: (c, t) ->
-      console.log('delete')
-      c.delete_flag = true
-  },
+  delete_menu_item,
   {
     name: 'remove values'
     action: (c, t) ->
@@ -397,12 +390,7 @@ weighted_collection_dropdown_menu = [
 ]
 
 huffman_collection_dropdown_menu = [
-  {
-    name: 'sort by weight',
-    action: (c, t) ->
-      console.log('sort by weight')
-      c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
-  },
+  sort_menu_item,
   {
     name: 'automatic Huffman step',
     action: (c, t) ->
@@ -452,12 +440,7 @@ code_list_dropdown_menu = [
       console.log('convert to tree')
       c.convertToTree()
   },
-  {
-    name: 'delete'
-    action: (c, t) ->
-      console.log('delete')
-      c.delete_flag = true
-  },
+  delete_menu_item,
 ]
 
 class NodeCollection
