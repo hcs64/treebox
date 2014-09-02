@@ -280,6 +280,9 @@ class ShannonFanoNode extends Node
       @len_x = @default_bbox.len.x
       @len_y = @default_bbox.len.y
 
+  getSize: () ->
+    return width: @len_x, height: @len_y
+
   addNode: (node) ->
     @contains.push(node)
     node.parent = this
@@ -380,17 +383,24 @@ weighted_collection_dropdown_menu = [
       console.log('Huffman')
       c.reconstruct_as = HuffmanNodeCollection
   },
-  delete_menu_item,
+  {
+    name: 'average message size'
+    action: (c, t) ->
+      console.log('compute average message size')
+      #c.averageSize()
+  },
   {
     name: 'remove values'
     action: (c, t) ->
       console.log('remove values')
       c.reconstruct_as = NodeCollection
   },
+  delete_menu_item,
 ]
 
 huffman_collection_dropdown_menu = [
   sort_menu_item,
+  tidy_menu_item,
   {
     name: 'automatic Huffman step',
     action: (c, t) ->
@@ -402,10 +412,12 @@ huffman_collection_dropdown_menu = [
       console.log('finish Huffman')
       # TODO: maybe first this should automatically finish the construction?
       c.reconstruct_as = WeightedNodeCollection
-  }
+  },
+  delete_menu_item,
 ]
 
 shannon_fano_dropdown_menu = [
+  tidy_menu_item,
   {
     name: 'automatic Shannon-Fano step',
     action: (c, t) ->
@@ -430,7 +442,8 @@ shannon_fano_dropdown_menu = [
         c.reconstruct_as = WeightedNodeCollectionFromSF
       else
         console.log('won\'t finish S-F, incomplete')
-  }
+  },
+  delete_menu_item,
 ]
 
 code_list_dropdown_menu = [
@@ -622,8 +635,13 @@ class NodeCollection
     rel_pos = []
 
     calcBounds = (node) ->
-      width = node.radius * 2
-      height = node.radius * 2
+      if node.getSize?
+        {width: own_width, height: own_height} = node.getSize()
+      else
+        own_width = node.radius * 2
+        own_height = node.radius * 2
+      width = own_width
+      height = own_height
 
       children = []
 
@@ -646,8 +664,8 @@ class NodeCollection
           children_width += cb.width
           children_max_height = Math.max(children_max_height, cb.height)
 
-        width = Math.max(width, children_width)
-        height = Math.max(height,
+        width = Math.max(own_width, children_width)
+        height = Math.max(own_height,
           children_max_height + 2 * default_node_radius)
 
         x = -width/2
@@ -687,7 +705,12 @@ class NodeCollection
       pidx = moved_nodes.indexOf(p)
       ppos = new_positions[pidx]
 
-      newpos = (x: ppos.x + pos.x, y: ppos.y + pos.y)
+      if c.getSize?
+        {height: own_height} = c.getSize()
+      else
+        own_height = c.radius * 2
+
+      newpos = (x: ppos.x + pos.x, y: ppos.y + pos.y + own_height/2)
       new_positions.push(newpos)
       moved_nodes.push(c)
 
