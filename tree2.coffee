@@ -625,7 +625,6 @@ class NodeCollection
       height = node.radius * 2
 
       children = []
-      children_bounds = []
 
       if node.child0?
         children.push(node.child0)
@@ -637,7 +636,6 @@ class NodeCollection
         children_max_height = 0
         for c, idx in children
           cb = calcBounds(c)
-          children_bounds[idx] = cb
 
           children_width += cb.width
           children_max_height = Math.max(children_max_height, cb.height)
@@ -652,7 +650,7 @@ class NodeCollection
           rel_pos.push (
             parent: node
             child: c
-            pos: ( x: x + children_bounds[idx].width/2, y:
+            pos: ( x: x + width / children.length / 2, y:
                       default_node_radius * 3 )
           )
           x += width / children.length
