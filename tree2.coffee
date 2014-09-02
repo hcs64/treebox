@@ -318,6 +318,12 @@ collection_dropdown_menu = [
       c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
   },
   {
+    name: 'delete'
+    action: (c, t) ->
+      console.log('delete')
+      c.delete_flag = true
+  },
+  {
     name: 'tidy',
     action: (c, t) ->
       console.log('tidy trees')
@@ -530,7 +536,9 @@ class NodeCollection
         @dropdown_menu.options[@dropdown_menu.selected].action(this, t)
       @dropdown_menu = null
 
-      if @reconstruct_as?
+      if @delete_flag
+        return null
+      else if @reconstruct_as?
         newcollection = new @reconstruct_as(this.shape)
         newcollection.copyNodesFrom(this)
         delete @reconstruct_as
@@ -1041,4 +1049,5 @@ canvas.addEventListener 'mousemove', (e) ->
 canvas.addEventListener 'mouseup', (e) ->
   t = Date.now()/1000
   pos = getCursorPosition(canvas, e)
-  collections = (collection.mouseup(pos, t) for collection in collections)
+  collections = (c.mouseup(pos, t) for c in collections)
+  collections = (c for c in collections when c isnt null)
