@@ -336,11 +336,17 @@ collection_dropdown_menu = [
     name: 'tidy',
     action: (c, t) ->
       console.log('tidy trees')
-      if c.nodes.length == 1
-        n = c.nodes[0]
+      for n in c.nodes
         c.tidy(n, (x: n.x, y: n.y))
+  },
+  {
+    name: 'convert to code table'
+    action: (c, t) ->
+      console.log('convert to code table')
+      if c.nodes.length != 1
+        console.log('only can convert a single tree')
       else
-        console.log('not attempting to tidy multiple trees')
+        c.convertToCode()
   },
   {
     name: 'delete'
@@ -355,11 +361,8 @@ weighted_collection_dropdown_menu = [
     name: 'tidy',
     action: (c, t) ->
       console.log('tidy trees')
-      if c.nodes.length == 1
-        n = c.nodes[0]
+      for n in c.nodes
         c.tidy(n, (x: n.x, y: n.y))
-      else
-        console.log('not attempting to tidy multiple trees')
   },
   {
     name: 'Shannon-Fano',
@@ -709,6 +712,20 @@ class NodeCollection
 
     @addAnimations([new CollectionAnimation(anims, -1)])
 
+  convertToCode: () ->
+    codes = {}
+    walkTree = (node, base = '') ->
+      if node.child0?
+        walkTree(node.child0, base+'0')
+      if node.child1?
+        walkTree(node.child1, base+'1')
+
+      if node.label? && node.label.length > 0
+        codes[node.label] = base
+    
+    walkTree(@nodes[0])
+
+    construct_queue.push((const: CodeListCollection, add_from: codes))
 
 class WeightedNodeCollection extends NodeCollection
   constructor: (shape) ->
@@ -998,6 +1015,8 @@ class CodeListCollection extends NodeCollection
       @addCode(symbol, code)
 
     @arrangeCodes(pos.x, pos.y)
+
+  setNodes: (codes, pos) -> @addCodes(codes, pos)
 
   addCode: (symbol, code) ->
     oldval = @codes[symbol]
