@@ -592,7 +592,7 @@ class NodeCollection
   tidy: (tidy, tree, tree_pos) ->
     rel_pos = []
 
-    getBounds = (node) ->
+    calcBounds = (node) ->
       width = node.radius * 2
       height = node.radius * 2
 
@@ -608,7 +608,7 @@ class NodeCollection
         children_width = 0
         children_max_height = 0
         for c, idx in children
-          cb = getBounds(c)
+          cb = calcBounds(c)
           children_bounds[idx] = cb
 
           children_width += cb.width
@@ -624,7 +624,6 @@ class NodeCollection
           rel_pos.push (
             parent: node
             child: c
-            child_bounds: children_bounds[idx]
             pos: ( x: x + children_bounds[idx].width/2, y:
                       default_node_radius * 3 )
           )
@@ -633,21 +632,33 @@ class NodeCollection
       width: width + default_node_radius
       height: height + default_node_radius
 
-    getBounds(tree)
+    calcBounds(tree)
 
-    tree.x = tree_pos.x
-    tree.y = tree_pos.y
+    duration = .1
+    anims = [ new NodeAnimation(tree, tree_pos, duration) ]
+
+    # rel_pos forms a post-order traversal, so by taking it backwards
+    # we will always have the new position for the root computed before we
+    # visit its children
+    moved_nodes = [tree]
+    new_positions = [tree_pos]
 
     for i in [rel_pos.length-1 ..0] by -1
       rp = rel_pos[i]
       c = rp.child
       p = rp.parent
-      cb = rp.child_bounds
       pos = rp.pos
-      console.log("child: #{c.x},#{c.y} bounds: #{cb.width},#{cb.height} parent: #{p.x},#{p.y} offset #{pos.x},#{pos.y}")
 
-      c.x = p.x + pos.x
-      c.y = p.y + pos.y
+      pidx = moved_nodes.indexOf(p)
+      ppos = new_positions[pidx]
+
+      newpos = (x: ppos.x + pos.x, y: ppos.y + pos.y)
+      new_positions.push(newpos)
+      moved_nodes.push(c)
+
+      anims.push(new NodeAnimation(c, newpos, duration))
+
+    @addAnimations([new CollectionAnimation(anims, -1)])
 
 class HuffmanNodeCollection extends NodeCollection
   constructor: (shape) ->
