@@ -292,12 +292,23 @@ class ShannonFanoNode extends Node
 class CodeNode extends Node
   constructor: (@symbol, @code) ->
     @error = null
+    @width = @radius
 
   render: (ctx) ->
     ctx.save()
     setStyle(ctx, node_text_style)
-    ctx.fillText("#{@symbol} = #{@code}", @x, @y)
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    msg = "#{@symbol} = #{@code}"
+    ctx.fillText(msg, @x, @y)
+    @width = ctx.measureText(msg).width
     ctx.restore()
+
+  isHit: (pos) ->
+    dx = pos.x - @x
+    dy = pos.y - @y
+    
+    dy > 0 && dy < node_text_spacing && dx > 0 && dx < @width
 
 collection_dropdown_menu = [
   {
@@ -918,6 +929,18 @@ class CodeListCollection extends NodeCollection
       codeobj.x = start_x
       codeobj.y = y
       y += node_text_spacing
+
+  mousemove: (pos) ->
+    if @selected? and @selected.node in @nodes
+      s = @selected
+      dx = pos.x - s.mx + s.ox - s.node.x
+      dy = pos.y - s.my + s.oy - s.node.y
+
+      for n in @nodes
+        n.x += dx
+        n.y += dy
+    else
+      super pos
 
 lerp2d = (t, p0, p1) ->
   if t < 0
