@@ -298,6 +298,16 @@ collection_dropdown_menu = [
       c.addAnimations(c.sortNodes( ((n1, n2) -> n2.value - n1.value), t))
   },
   {
+    name: 'tidy',
+    action: (c, t) ->
+      console.log('tidy trees')
+      if c.nodes.length == 1
+        n = c.nodes[0]
+        c.tidy(t, n, (x: n.x, y: n.y))
+      else
+        console.log('not attempting to tidy multiple trees')
+  },
+  {
     name: 'Shannon-Fano',
     action: (c, t) ->
       console.log('Shannon-Fano')
@@ -578,6 +588,67 @@ class NodeCollection
 
   addAnimations: (anims) ->
     @animations = @animations.concat(anims)
+
+  tidy: (tidy, tree, tree_pos) ->
+    rel_pos = []
+
+    getBounds = (node) ->
+      width = node.radius * 2
+      height = node.radius * 2
+
+      children = []
+      children_bounds = []
+
+      if node.child0?
+        children.push(node.child0)
+      if node.child1?
+        children.push(node.child1)
+
+      if children.length > 0
+        children_width = 0
+        children_max_height = 0
+        for c, idx in children
+          cb = getBounds(c)
+          children_bounds[idx] = cb
+
+          children_width += cb.width
+          children_max_height = Math.max(children_max_height, cb.height)
+
+        width = Math.max(width,
+          children_width + (children.length-1) * default_node_radius)
+        height = Math.max(height,
+          children_max_height + 2 * default_node_radius)
+
+        x = -width/2
+
+        for c, idx in children
+          rel_pos.push (
+            parent: node
+            child: c
+            child_bounds: children_bounds[idx]
+            pos: ( x: x + children_bounds[idx].width/2, y:
+                      default_node_radius * 3 )
+          )
+          x += children_bounds[idx].width + default_node_radius
+
+      width: width + default_node_radius * 2
+      height: height + default_node_radius * 2
+
+    getBounds(tree)
+
+    tree.x = tree_pos.x
+    tree.y = tree_pos.y
+
+    for i in [rel_pos.length-1 ..0] by -1
+      rp = rel_pos[i]
+      c = rp.child
+      p = rp.parent
+      cb = rp.child_bounds
+      pos = rp.pos
+      console.log("child: #{c.x},#{c.y} bounds: #{cb.width},#{cb.height} parent: #{p.x},#{p.y} offset #{pos.x},#{pos.y}")
+
+      c.x = p.x + pos.x
+      c.y = p.y + pos.y
 
 class HuffmanNodeCollection extends NodeCollection
   constructor: (shape) ->
