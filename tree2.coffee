@@ -660,8 +660,13 @@ class NodeCollection
 
       if node.child0?
         children.push(node.child0)
+      else if node.child1?
+        children.push((radius: default_node_radius, dummy: true))
+
       if node.child1?
         children.push(node.child1)
+      else if node.child0?
+        children.push((radius: default_node_radius, dummy: true))
 
       if children.length > 0
         children_width = 0
@@ -707,10 +712,12 @@ class NodeCollection
       p = rp.parent
       pos = rp.pos
 
+      if c.dummy
+        continue
+
       pidx = moved_nodes.indexOf(p)
       ppos = new_positions[pidx]
 
-      console.log(pos.x, pos.y, ppos.x, ppos.y)
       newpos = (x: ppos.x + pos.x, y: ppos.y + pos.y)
       new_positions.push(newpos)
       moved_nodes.push(c)
