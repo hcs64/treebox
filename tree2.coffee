@@ -65,6 +65,7 @@ node_emph_style = stroke: 'white', width: 5.5, fill: 'black'
 link_style = stroke: 'white', width: 1.5
 light_link_style = stroke: 'white', width: .5
 node_text_style = fill: 'white', font: '16px monospace'
+node_text_error_style = fill: 'red', font: '16px monospace'
 node_text_spacing = 18
 menu_text_style = fill: 'white', font: '16px sans'
 menu_text_invert_style = fill: 'black', font: '16px sans'
@@ -296,7 +297,10 @@ class CodeNode extends Node
 
   render: (ctx) ->
     ctx.save()
-    setStyle(ctx, node_text_style)
+    if @error?
+      setStyle(ctx, node_text_error_style)
+    else
+      setStyle(ctx, node_text_style)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
     msg = "#{@symbol} = #{@code}"
@@ -901,6 +905,7 @@ class CodeListCollection extends NodeCollection
   constructor: (shape) ->
     super shape
     @codes = {}
+    @errors = false
 
   addCodes: (codes, pos) ->
     for symbol, code of codes
@@ -926,12 +931,38 @@ class CodeListCollection extends NodeCollection
       @nodes.push(newval)
 
     @codes[symbol] = newval
-    # TODO: needs to check for errors, I think this should be done
-    # here even if it is less efficient just to be safe
+
+    @checkForErrors()
+
+  checkForErrors: () ->
+    @errors = false
+
+    for n in @nodes
+      n.error = null
+
+    for symbol, codeobj of @codes
+      ok = true
+
+      for symbol2, codeobj2 of @codes
+        if symbol == symbol2
+          continue
+        if codeobj2.code.indexOf(codeobj.code) == 0
+          ok = false
+          @errors = true
+          # codeobj appears in codeobj2
+          err = (start: 0, end: codeobj.code.length)
+          if codeobj2.error?
+            codeobj2.error.push(err)
+          else
+            codeobj2.error = [err]
+      if not ok
+        codeobj.error = [(start: 0, end: codeobj.code.length)]
+
+    return
 
   arrangeCodes: (start_x, start_y) ->
     y = start_y
-    for symbol, codeobj of @nodes
+    for symbol, codeobj of @codes
       codeobj.x = start_x
       codeobj.y = y
       y += node_text_spacing
